@@ -95,8 +95,8 @@ export class SchwabClient {
     // Use the CBOE 13-week Treasury Bill yield ($IRX) as the risk-free proxy.
     const quotes = await this.getQuotes(["$IRX"]);
     const irxQuote =
-      quotes["$IRX"] ??
-      quotes["IRX"] ??
+      quotes.$IRX ??
+      quotes.IRX ??
       quotes["$IRX.X"] ??
       (Object.keys(quotes).length === 1 ? Object.values(quotes)[0] : undefined);
     const ratePercent = irxQuote?.quote.mark ?? irxQuote?.quote.lastPrice;
@@ -110,11 +110,11 @@ export class SchwabClient {
 
   async getQuotes(
     symbols: string[],
-  ): Promise<Record<string, SchwabQuoteResponse>> {
+  ): Promise<Record<string, SchwabQuoteResponse | undefined>> {
     const symbolsStr = symbols.map(encodeURIComponent).join(",");
-    return await this.makeApiRequest<Record<string, SchwabQuoteResponse>>(
-      `/marketdata/v1/quotes?symbols=${symbolsStr}`,
-    );
+    return await this.makeApiRequest<
+      Record<string, SchwabQuoteResponse | undefined>
+    >(`/marketdata/v1/quotes?symbols=${symbolsStr}`);
   }
 
   async getPriceHistory({
@@ -168,7 +168,7 @@ export class SchwabClient {
 
   async getVixLevel(): Promise<number | undefined> {
     const quotes = await this.getQuotes(["$VIX"]);
-    const vixQuote = quotes["$VIX"];
+    const vixQuote = quotes.$VIX;
     return vixQuote?.quote.mark ?? vixQuote?.quote.lastPrice;
   }
 
@@ -210,7 +210,10 @@ export class SchwabClient {
 
     const processExpDateMap = (
       expDateMap:
-        | Record<string, Record<string, SchwabOptionContract[]>>
+        | Record<
+            string,
+            Record<string, SchwabOptionContract[] | undefined> | undefined
+          >
         | undefined,
       isCall: boolean,
     ) => {
@@ -260,13 +263,13 @@ export class SchwabClient {
 
   async getAccountEquity(): Promise<number> {
     // This assumes there is exactly one account connected, which is the one we want.
-    const [account] = await this.makeApiRequest<SchwabAccount[]>(
+    const accounts = await this.makeApiRequest<SchwabAccount[]>(
       "/trader/v1/accounts?fields=positions",
     );
-    if (!account) {
+    if (accounts.length === 0) {
       throw new Error("No Schwab account found");
     }
-    return account.securitiesAccount.currentBalances.liquidationValue;
+    return accounts[0].securitiesAccount.currentBalances.liquidationValue;
   }
 
   async getAccountBalances(): Promise<{
@@ -276,13 +279,13 @@ export class SchwabClient {
     buyingPower: number;
     equity: number;
   }> {
-    const [account] = await this.makeApiRequest<SchwabAccount[]>(
+    const accounts = await this.makeApiRequest<SchwabAccount[]>(
       "/trader/v1/accounts?fields=positions",
     );
-    if (!account) {
+    if (accounts.length === 0) {
       throw new Error("No Schwab account found");
     }
-    const balances = account.securitiesAccount.currentBalances;
+    const balances = accounts[0].securitiesAccount.currentBalances;
     return {
       liquidationValue: balances.liquidationValue,
       cashBalance: balances.cashBalance,
@@ -625,7 +628,6 @@ export class SchwabClient {
       }
       throw new Error(`Failed to fetch ${endpoint}: ${response.statusText}`);
     }
-    const responseBody = await response.json();
-    return responseBody as T;
+    return (await response.json()) as T;
   }
 }
