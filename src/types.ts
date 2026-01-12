@@ -104,7 +104,7 @@ export interface OptionQuote {
   delta: number; // negative for puts
 }
 
-export interface ExistingSpread {
+export interface PutCreditSpread {
   underlying: string;
   expiry: Date;
   shortStrike: number;
@@ -112,7 +112,6 @@ export interface ExistingSpread {
   credit: number; // entry credit, points
   quantity: number; // positive = short spread
   theoreticalMaxLossPts: number; // per spread
-  plannedLossPts: number; // at stop (2x credit), per spread
 }
 
 export type ISODateTime = string;
@@ -592,7 +591,11 @@ export type SchwabMoversIndexSymbol =
   | "OPTION_PUT"
   | "OPTION_CALL";
 
-export type SchwabMoversSort = "VOLUME" | "TRADES" | "PERCENT_CHANGE_UP" | "PERCENT_CHANGE_DOWN";
+export type SchwabMoversSort =
+  | "VOLUME"
+  | "TRADES"
+  | "PERCENT_CHANGE_UP"
+  | "PERCENT_CHANGE_DOWN";
 
 export type SchwabMoversFrequency = 0 | 1 | 5 | 10 | 30 | 60;
 

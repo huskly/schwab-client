@@ -1,6 +1,6 @@
 {
   "name": "@huskly/schwab-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Schwab Market Data and Trading API client",
   "type": "module",
   "main": "dist/index.js",
@@ -20,6 +20,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
+    "format": "prettier --write 'src/**/*.ts' 'package.json' 'tsconfig.json'",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -36,6 +37,7 @@
     "date-fns": "^4.1.0"
   },
   "devDependencies": {
+    "prettier": "^3.7.4",
     "typescript": "^5.7.2"
   }
 }

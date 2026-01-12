@@ -1,5 +1,4 @@
 import type {
-  ExistingSpread,
   OptionQuote,
   PriceHistoryResponse,
   SchwabOrder,
@@ -12,6 +11,7 @@ import type {
   SchwabMoversSort,
   SchwabMoversFrequency,
   SchwabMoversResponse,
+  PutCreditSpread,
 } from "./types.js";
 import type {
   SchwabAccount,
@@ -91,15 +91,29 @@ export class SchwabClient {
     return new Date();
   }
 
-  getRiskFreeRate(_date: Date): Promise<number> {
-    // For simplicity, return a fixed risk-free rate of 2%
-    return Promise.resolve(0.02);
+  async getRiskFreeRate(_date: Date): Promise<number> {
+    // Use the CBOE 13-week Treasury Bill yield ($IRX) as the risk-free proxy.
+    const quotes = await this.getQuotes(["$IRX"]);
+    const irxQuote =
+      quotes["$IRX"] ??
+      quotes["IRX"] ??
+      quotes["$IRX.X"] ??
+      (Object.keys(quotes).length === 1 ? Object.values(quotes)[0] : undefined);
+    const ratePercent = irxQuote?.quote.mark ?? irxQuote?.quote.lastPrice;
+
+    if (ratePercent === undefined || Number.isNaN(ratePercent)) {
+      throw new Error("Unable to fetch risk-free rate from $IRX quote data");
+    }
+
+    return ratePercent / 100;
   }
 
-  async getQuotes(symbols: string[]): Promise<Record<string, SchwabQuoteResponse>> {
+  async getQuotes(
+    symbols: string[],
+  ): Promise<Record<string, SchwabQuoteResponse>> {
     const symbolsStr = symbols.map(encodeURIComponent).join(",");
     return await this.makeApiRequest<Record<string, SchwabQuoteResponse>>(
-      `/marketdata/v1/quotes?symbols=${symbolsStr}`
+      `/marketdata/v1/quotes?symbols=${symbolsStr}`,
     );
   }
 
@@ -115,7 +129,8 @@ export class SchwabClient {
     endDate?: number;
   }): Promise<PriceHistoryResponse["candles"]> {
     // If days is not provided but startDate and endDate are, calculate days from the date range
-    const effectiveDays = days ?? (startDate ? differenceInDays(endDate, startDate) : 30);
+    const effectiveDays =
+      days ?? (startDate ? differenceInDays(endDate, startDate) : 30);
     // For requests > 132 trading days (~6 months), use periodType "year"
     // Otherwise use periodType "month" with appropriate period
     const useYear = effectiveDays > 132;
@@ -141,7 +156,7 @@ export class SchwabClient {
       params.append("startDate", String(startDate));
     }
     const data = await this.makeApiRequest<PriceHistoryResponse>(
-      `/marketdata/v1/pricehistory?${params.toString()}`
+      `/marketdata/v1/pricehistory?${params.toString()}`,
     );
 
     if (data.empty) {
@@ -162,10 +177,12 @@ export class SchwabClient {
     symbol: string,
     contractType: "PUT" | "CALL",
     fromDate: string,
-    toDate: string
+    toDate: string,
   ): Promise<Date[]> {
     const data = await this.makeApiRequest<SchwabOptionChainResponse>(
-      `/marketdata/v1/chains?symbol=${encodeURIComponent(symbol)}&contractType=${contractType}&fromDate=${fromDate}&toDate=${toDate}`
+      `/marketdata/v1/chains?symbol=${encodeURIComponent(
+        symbol,
+      )}&contractType=${contractType}&fromDate=${fromDate}&toDate=${toDate}`,
     );
 
     if (!data.putExpDateMap) {
@@ -184,14 +201,18 @@ export class SchwabClient {
   async getOptionChain(symbol: string, expiry: Date): Promise<OptionQuote[]> {
     const expiryStr = format(expiry, "yyyy-MM-dd");
     const data = await this.makeApiRequest<SchwabOptionChainResponse>(
-      `/marketdata/v1/chains?symbol=${encodeURIComponent(symbol)}&fromDate=${expiryStr}&toDate=${expiryStr}`
+      `/marketdata/v1/chains?symbol=${encodeURIComponent(
+        symbol,
+      )}&fromDate=${expiryStr}&toDate=${expiryStr}`,
     );
 
     const options: OptionQuote[] = [];
 
     const processExpDateMap = (
-      expDateMap: Record<string, Record<string, SchwabOptionContract[]>> | undefined,
-      isCall: boolean
+      expDateMap:
+        | Record<string, Record<string, SchwabOptionContract[]>>
+        | undefined,
+      isCall: boolean,
     ) => {
       if (!expDateMap) return;
 
@@ -240,7 +261,7 @@ export class SchwabClient {
   async getAccountEquity(): Promise<number> {
     // This assumes there is exactly one account connected, which is the one we want.
     const [account] = await this.makeApiRequest<SchwabAccount[]>(
-      "/trader/v1/accounts?fields=positions"
+      "/trader/v1/accounts?fields=positions",
     );
     if (!account) {
       throw new Error("No Schwab account found");
@@ -256,7 +277,7 @@ export class SchwabClient {
     equity: number;
   }> {
     const [account] = await this.makeApiRequest<SchwabAccount[]>(
-      "/trader/v1/accounts?fields=positions"
+      "/trader/v1/accounts?fields=positions",
     );
     if (!account) {
       throw new Error("No Schwab account found");
@@ -273,7 +294,7 @@ export class SchwabClient {
 
   async getPositions(symbol?: string): Promise<SchwabPosition[]> {
     const accounts = await this.makeApiRequest<SchwabAccount[]>(
-      "/trader/v1/accounts?fields=positions"
+      "/trader/v1/accounts?fields=positions",
     );
 
     const allPositions: SchwabPosition[] = [];
@@ -293,17 +314,19 @@ export class SchwabClient {
     return allPositions;
   }
 
-  async getExistingSpreads(symbol: string): Promise<ExistingSpread[]> {
+  async getPutCreditSpreads(symbol: string): Promise<PutCreditSpread[]> {
     const accounts = await this.makeApiRequest<SchwabAccount[]>(
-      "/trader/v1/accounts?fields=positions"
+      "/trader/v1/accounts?fields=positions",
     );
 
-    const spreads: ExistingSpread[] = [];
+    const spreads: PutCreditSpread[] = [];
 
     for (const account of accounts) {
       const positions = account.securitiesAccount.positions;
       const optionPositions = positions.filter(
-        (pos) => pos.instrument.assetType === "OPTION" && pos.instrument.underlyingSymbol === symbol
+        (pos) =>
+          pos.instrument.assetType === "OPTION" &&
+          pos.instrument.underlyingSymbol === symbol,
       );
 
       // Group by expiry to find spreads
@@ -324,7 +347,9 @@ export class SchwabClient {
 
       // Find put spreads (short put + long put at lower strike)
       for (const [expiryKey, expiryPositions] of byExpiry) {
-        const puts = expiryPositions.filter((p) => p.instrument.symbol.includes("P"));
+        const puts = expiryPositions.filter((p) =>
+          p.instrument.symbol.includes("P"),
+        );
 
         const shortPuts = puts.filter((p) => p.shortQuantity > 0);
         const longPuts = puts.filter((p) => p.longQuantity > 0);
@@ -341,7 +366,10 @@ export class SchwabClient {
             const longStrike = parseInt(longMatch[2]) / 1000;
 
             if (longStrike < shortStrike) {
-              const quantity = Math.min(shortPut.shortQuantity, longPut.longQuantity);
+              const quantity = Math.min(
+                shortPut.shortQuantity,
+                longPut.longQuantity,
+              );
               const width = shortStrike - longStrike;
               const credit = shortPut.averagePrice - longPut.averagePrice;
 
@@ -359,7 +387,6 @@ export class SchwabClient {
                 credit,
                 quantity,
                 theoreticalMaxLossPts: width - credit,
-                plannedLossPts: credit * 2, // stop at 2x credit
               });
             }
           }
@@ -370,7 +397,9 @@ export class SchwabClient {
     return spreads;
   }
 
-  async fetchAccountNumbers(): Promise<{ accountNumber: string; hashValue: string }[]> {
+  async fetchAccountNumbers(): Promise<
+    { accountNumber: string; hashValue: string }[]
+  > {
     const accountNumbers = await this.makeApiRequest<
       { accountNumber: string; hashValue: string }[]
     >("/trader/v1/accounts/accountNumbers");
@@ -379,13 +408,13 @@ export class SchwabClient {
 
   async fetchTransactionHistory(
     startDate: Date = startOfYear(this.today()),
-    endDate: Date = this.today()
+    endDate: Date = this.today(),
   ): Promise<SchwabAccountTransactionHistory[]> {
     const accountHashes = await this.fetchAccountNumbers();
     const histories = await Promise.all(
       accountHashes.map(({ hashValue }) =>
-        this.fetchAccountTransactionHistory(hashValue, startDate, endDate)
-      )
+        this.fetchAccountTransactionHistory(hashValue, startDate, endDate),
+      ),
     );
     return accountHashes.map((account, index) => ({
       accountNumber: account.accountNumber,
@@ -396,7 +425,7 @@ export class SchwabClient {
   async fetchAccountTransactionHistory(
     accountHash: string,
     startDate: Date = startOfYear(this.today()),
-    endDate: Date = this.today()
+    endDate: Date = this.today(),
   ): Promise<SchwabTransaction[]> {
     if (!accountHash) {
       throw new Error("Account hash is required to fetch transaction history");
@@ -405,7 +434,7 @@ export class SchwabClient {
     const formattedStartDate = startDate.toISOString();
     const formattedEndDate = endDate.toISOString();
     return await this.makeApiRequest<SchwabTransaction[]>(
-      `/trader/v1/accounts/${accountHash}/transactions?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
+      `/trader/v1/accounts/${accountHash}/transactions?startDate=${formattedStartDate}&endDate=${formattedEndDate}`,
     );
   }
 
@@ -417,7 +446,9 @@ export class SchwabClient {
   }): Promise<{ accountNumber: string; orders: SchwabOrder[] }[]> {
     const accountHashes = await this.fetchAccountNumbers();
     const ordersPerAccount = await Promise.all(
-      accountHashes.map(({ hashValue }) => this.fetchAccountOrders(hashValue, options))
+      accountHashes.map(({ hashValue }) =>
+        this.fetchAccountOrders(hashValue, options),
+      ),
     );
     return accountHashes.map((account, index) => ({
       accountNumber: account.accountNumber,
@@ -432,7 +463,7 @@ export class SchwabClient {
       toEnteredTime: Date;
       maxResults?: number;
       status?: SchwabOrderStatus;
-    }
+    },
   ): Promise<SchwabOrder[]> {
     if (!accountHash) {
       throw new Error("Account hash is required to fetch orders");
@@ -451,7 +482,7 @@ export class SchwabClient {
       params.append("status", options.status);
     }
     return await this.makeApiRequest<SchwabOrder[]>(
-      `/trader/v1/accounts/${accountHash}/orders?${params.toString()}`
+      `/trader/v1/accounts/${accountHash}/orders?${params.toString()}`,
     );
   }
 
@@ -459,7 +490,10 @@ export class SchwabClient {
    * Place an order for a specific account.
    * Returns the order ID from the Location header on success.
    */
-  async placeOrder(accountHash: string, order: SchwabOrderRequest): Promise<{ orderId: string }> {
+  async placeOrder(
+    accountHash: string,
+    order: SchwabOrderRequest,
+  ): Promise<{ orderId: string }> {
     if (!accountHash) {
       throw new Error("Account hash is required to place an order");
     }
@@ -477,7 +511,9 @@ export class SchwabClient {
     if (!response.ok) {
       const errorBody = await response.text();
       throw new Error(
-        `Failed to place order: ${String(response.status)} ${response.statusText} - ${errorBody}`
+        `Failed to place order: ${String(response.status)} ${
+          response.statusText
+        } - ${errorBody}`,
       );
     }
 
@@ -489,7 +525,9 @@ export class SchwabClient {
   }
 
   async getUserPreference(): Promise<SchwabUserPreference> {
-    return await this.makeApiRequest<SchwabUserPreference>("/trader/v1/userPreference");
+    return await this.makeApiRequest<SchwabUserPreference>(
+      "/trader/v1/userPreference",
+    );
   }
 
   /**
@@ -500,7 +538,7 @@ export class SchwabClient {
    */
   async searchInstruments(
     symbol: string,
-    projection: SchwabInstrumentSearchProjection
+    projection: SchwabInstrumentSearchProjection,
   ): Promise<SchwabInstrumentResponse[]> {
     const params = new URLSearchParams({
       symbol: symbol,
@@ -523,7 +561,7 @@ export class SchwabClient {
   async getMovers(
     symbolId: SchwabMoversIndexSymbol,
     sort?: SchwabMoversSort,
-    frequency?: SchwabMoversFrequency
+    frequency?: SchwabMoversFrequency,
   ): Promise<SchwabMoversResponse> {
     const params = new URLSearchParams();
     if (sort) {
@@ -533,11 +571,15 @@ export class SchwabClient {
       params.append("frequency", String(frequency));
     }
     const queryString = params.toString();
-    const url = `/marketdata/v1/movers/${encodeURIComponent(symbolId)}${queryString ? `?${queryString}` : ""}`;
+    const url = `/marketdata/v1/movers/${encodeURIComponent(symbolId)}${
+      queryString ? `?${queryString}` : ""
+    }`;
     return await this.makeApiRequest<SchwabMoversResponse>(url);
   }
 
-  private headersToRecord(headers: RequestInit["headers"]): Record<string, string> {
+  private headersToRecord(
+    headers: RequestInit["headers"],
+  ): Record<string, string> {
     const result: Record<string, string> = {};
     if (!headers) return result;
 
@@ -557,9 +599,14 @@ export class SchwabClient {
     return result;
   }
 
-  private async makeApiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async makeApiRequest<T>(
+    endpoint: string,
+    options: RequestInit = {},
+  ): Promise<T> {
     const existingHeaders = this.headersToRecord(options.headers);
-    const normalizedEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+    const normalizedEndpoint = endpoint.startsWith("/")
+      ? endpoint.slice(1)
+      : endpoint;
     const url = `${SCHWAB_API_BASE_URL}/${normalizedEndpoint}`;
 
     const response = await fetch(url, {
@@ -572,7 +619,9 @@ export class SchwabClient {
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error("Unauthorized - access token may be expired or invalid");
+        throw new Error(
+          "Unauthorized - access token may be expired or invalid",
+        );
       }
       throw new Error(`Failed to fetch ${endpoint}: ${response.statusText}`);
     }
