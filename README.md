@@ -16,9 +16,9 @@ npm install @huskly/schwab-client
 ## Usage
 
 ```typescript
-import { SchwabClient } from '@huskly/schwab-client';
+import { SchwabClient } from "@huskly/schwab-client";
 
-const client = new SchwabClient('your-access-token');
+const client = new SchwabClient("your-access-token");
 ```
 
 ### Market Data
@@ -26,41 +26,34 @@ const client = new SchwabClient('your-access-token');
 #### Get Quotes
 
 ```typescript
-const quotes = await client.getQuotes(['AAPL', 'GOOGL', 'MSFT']);
-console.log(quotes['AAPL'].quote.lastPrice);
+const quotes = await client.getQuotes(["AAPL", "GOOGL", "MSFT"]);
+console.log(quotes["AAPL"].quote.lastPrice);
 ```
 
 #### Get Price History
 
 ```typescript
 // Last 30 days
-const history = await client.getPriceHistory({ symbol: 'AAPL', days: 30 });
+const history = await client.getPriceHistory({ symbol: "AAPL", days: 30 });
 
 // Custom date range
 const history = await client.getPriceHistory({
-  symbol: 'AAPL',
-  startDate: Date.parse('2024-01-01'),
+  symbol: "AAPL",
+  startDate: Date.parse("2024-01-01"),
   endDate: Date.now(),
 });
-```
-
-#### Get VIX Level
-
-```typescript
-const vix = await client.getVixLevel();
-console.log(`VIX: ${vix}`);
 ```
 
 #### Search Instruments
 
 ```typescript
-const results = await client.searchInstruments('AAPL', 'symbol-search');
+const results = await client.searchInstruments("AAPL", "symbol-search");
 ```
 
 #### Get Market Movers
 
 ```typescript
-const movers = await client.getMovers('$SPX', 'PERCENT_CHANGE_UP');
+const movers = await client.getMovers("$SPX", "PERCENT_CHANGE_UP");
 console.log(movers.screeners);
 ```
 
@@ -70,19 +63,23 @@ console.log(movers.screeners);
 
 ```typescript
 const expiries = await client.getAvailableExpiries(
-  'SPY',
-  'CALL',
-  '2025-01-01',
-  '2025-06-30'
+  "SPY",
+  "CALL",
+  "2025-01-01",
+  "2025-06-30",
 );
 ```
 
 #### Get Option Chain
 
 ```typescript
-const chain = await client.getOptionChain('SPY', new Date('2025-01-17'));
+const chain = await client.getOptionChain("SPY", new Date("2025-01-17"));
 for (const option of chain) {
-  console.log(`${option.symbol}: ${option.strike} ${option.isCall ? 'C' : 'P'} @ ${option.mid}`);
+  console.log(
+    `${option.symbol}: ${option.strike} ${option.isCall ? "C" : "P"} @ ${
+      option.mid
+    }`,
+  );
 }
 ```
 
@@ -90,10 +87,10 @@ for (const option of chain) {
 
 ```typescript
 const option = await client.getOptionQuote({
-  symbol: 'SPY',
-  expiry: new Date('2025-01-17'),
+  symbol: "SPY",
+  expiry: new Date("2025-01-17"),
   strike: 600,
-  type: 'call',
+  type: "call",
 });
 ```
 
@@ -115,7 +112,7 @@ console.log(`Cash: $${balances.cashBalance}`);
 const positions = await client.getPositions();
 
 // Filter by symbol
-const applePositions = await client.getPositions('AAPL');
+const applePositions = await client.getPositions("AAPL");
 ```
 
 #### Get Account Numbers
@@ -131,8 +128,8 @@ for (const account of accounts) {
 
 ```typescript
 const history = await client.fetchTransactionHistory(
-  new Date('2024-01-01'),
-  new Date()
+  new Date("2024-01-01"),
+  new Date(),
 );
 ```
 
@@ -149,31 +146,31 @@ console.log(prefs.streamerInfo.streamerSocketUrl);
 
 ```typescript
 const orders = await client.fetchOrders({
-  fromEnteredTime: new Date('2024-01-01'),
+  fromEnteredTime: new Date("2024-01-01"),
   toEnteredTime: new Date(),
-  status: 'FILLED', // Optional filter
-  maxResults: 100,  // Optional limit
+  status: "FILLED", // Optional filter
+  maxResults: 100, // Optional limit
 });
 ```
 
 #### Place an Order
 
 ```typescript
-import type { SchwabOrderRequest } from '@huskly/schwab-client';
+import type { SchwabOrderRequest } from "@huskly/schwab-client";
 
 const order: SchwabOrderRequest = {
-  session: 'NORMAL',
-  duration: 'DAY',
-  orderType: 'LIMIT',
-  orderStrategyType: 'SINGLE',
-  price: 150.00,
+  session: "NORMAL",
+  duration: "DAY",
+  orderType: "LIMIT",
+  orderStrategyType: "SINGLE",
+  price: 150.0,
   orderLegCollection: [
     {
-      instruction: 'BUY',
+      instruction: "BUY",
       quantity: 10,
       instrument: {
-        assetType: 'EQUITY',
-        symbol: 'AAPL',
+        assetType: "EQUITY",
+        symbol: "AAPL",
       },
     },
   ],
@@ -186,11 +183,11 @@ console.log(`Order placed: ${orderId}`);
 
 ### Utilities
 
-#### Get Risk-Free Rate
+#### Get "Risk-Free" Rate
 
 ```typescript
 const rate = await client.getRiskFreeRate(new Date());
-// Returns 0.02 (2%)
+// Returns latest 13-week T-bill yield as a decimal (e.g. 0.053 for 5.3%)
 ```
 
 #### Get Current Date
@@ -203,36 +200,35 @@ const today = client.today();
 
 ### Market Data Methods
 
-| Method | Description |
-|--------|-------------|
-| `getQuotes(symbols)` | Get real-time quotes for multiple symbols |
-| `getPriceHistory(args)` | Get historical price data |
-| `getVixLevel()` | Get current VIX index level |
-| `getAvailableExpiries(symbol, contractType, fromDate, toDate)` | Get available option expiration dates |
-| `getOptionChain(symbol, expiry)` | Get full options chain for a symbol and expiry |
-| `getOptionQuote(args)` | Get quote for a specific option contract |
-| `searchInstruments(symbol, projection)` | Search for instruments |
-| `getMovers(symbolId, sort?, frequency?)` | Get top market movers |
+| Method                                                         | Description                                    |
+| -------------------------------------------------------------- | ---------------------------------------------- |
+| `getQuotes(symbols)`                                           | Get real-time quotes for multiple symbols      |
+| `getPriceHistory(args)`                                        | Get historical price data                      |
+| `getAvailableExpiries(symbol, contractType, fromDate, toDate)` | Get available option expiration dates          |
+| `getOptionChain(symbol, expiry)`                               | Get full options chain for a symbol and expiry |
+| `getOptionQuote(args)`                                         | Get quote for a specific option contract       |
+| `searchInstruments(symbol, projection)`                        | Search for instruments                         |
+| `getMovers(symbolId, sort?, frequency?)`                       | Get top market movers                          |
 
 ### Account Methods
 
-| Method | Description |
-|--------|-------------|
-| `getAccountEquity()` | Get total account equity |
-| `getAccountBalances()` | Get detailed account balances |
-| `getPositions(symbol?)` | Get account positions |
-| `getExistingSpreads(symbol)` | Get existing option spreads |
-| `fetchAccountNumbers()` | Get all linked account numbers |
-| `fetchTransactionHistory(startDate?, endDate?)` | Get transaction history |
-| `getUserPreference()` | Get user preferences and streaming info |
+| Method                                          | Description                             |
+| ----------------------------------------------- | --------------------------------------- |
+| `getAccountEquity()`                            | Get total account equity                |
+| `getAccountBalances()`                          | Get detailed account balances           |
+| `getPositions(symbol?)`                         | Get account positions                   |
+| `getPutCreditSpreads(symbol)`                   | Get existing PUT option credit spreads  |
+| `fetchAccountNumbers()`                         | Get all linked account numbers          |
+| `fetchTransactionHistory(startDate?, endDate?)` | Get transaction history                 |
+| `getUserPreference()`                           | Get user preferences and streaming info |
 
 ### Order Methods
 
-| Method | Description |
-|--------|-------------|
-| `fetchOrders(options)` | Get orders across all accounts |
+| Method                                     | Description                     |
+| ------------------------------------------ | ------------------------------- |
+| `fetchOrders(options)`                     | Get orders across all accounts  |
 | `fetchAccountOrders(accountHash, options)` | Get orders for specific account |
-| `placeOrder(accountHash, order)` | Place a new order |
+| `placeOrder(accountHash, order)`           | Place a new order               |
 
 ## Types
 
@@ -247,7 +243,7 @@ import type {
   OptionQuote,
   PriceHistoryCandle,
   // ... and many more
-} from '@huskly/schwab-client';
+} from "@huskly/schwab-client";
 ```
 
 ## Error Handling
@@ -256,9 +252,9 @@ The client throws errors for failed API requests:
 
 ```typescript
 try {
-  const quotes = await client.getQuotes(['INVALID']);
+  const quotes = await client.getQuotes(["INVALID"]);
 } catch (error) {
-  if (error.message.includes('Unauthorized')) {
+  if (error.message.includes("Unauthorized")) {
     // Token expired or invalid
   }
 }

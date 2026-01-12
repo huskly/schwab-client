@@ -11,7 +11,7 @@ export type {
   SchwabQuoteFundamental,
   SchwabQuoteResponse,
   OptionQuote,
-  ExistingSpread,
+  PutCreditSpread,
   // Order types
   ISODateTime,
   SchwabSession,
