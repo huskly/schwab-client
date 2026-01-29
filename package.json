@@ -1,6 +1,6 @@
 {
   "name": "@huskly/schwab-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Schwab Market Data and Trading API client",
   "type": "module",
   "main": "dist/index.js",
