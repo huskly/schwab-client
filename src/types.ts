@@ -635,6 +635,7 @@ export interface SchwabOrderRequest {
   duration: SchwabDuration;
   orderType: SchwabOrderType;
   orderStrategyType: SchwabOrderStrategyType;
+  complexOrderStrategyType?: SchwabComplexOrderStrategyType;
   price?: number;
   stopPrice?: number;
   stopPriceLinkBasis?: SchwabLinkBasis;
