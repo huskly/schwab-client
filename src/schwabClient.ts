@@ -91,6 +91,10 @@ export class SchwabClient {
     return new Date();
   }
 
+  private encodeSymbol(symbol: string): string {
+    return encodeURIComponent(symbol).replaceAll(".", "%2E");
+  }
+
   async getRiskFreeRate(_date: Date): Promise<number> {
     // Use the CBOE 13-week Treasury Bill yield ($IRX) as the risk-free proxy.
     const quotes = await this.getQuotes(["$IRX"]);
@@ -111,7 +115,9 @@ export class SchwabClient {
   async getQuotes(
     symbols: string[],
   ): Promise<Record<string, SchwabQuoteResponse | undefined>> {
-    const symbolsStr = symbols.map(encodeURIComponent).join(",");
+    const symbolsStr = symbols
+      .map((symbol) => this.encodeSymbol(symbol))
+      .join(",");
     return await this.makeApiRequest<
       Record<string, SchwabQuoteResponse | undefined>
     >(`/marketdata/v1/quotes?symbols=${symbolsStr}`);
@@ -180,7 +186,7 @@ export class SchwabClient {
     toDate: string,
   ): Promise<Date[]> {
     const data = await this.makeApiRequest<SchwabOptionChainResponse>(
-      `/marketdata/v1/chains?symbol=${encodeURIComponent(
+      `/marketdata/v1/chains?symbol=${this.encodeSymbol(
         symbol,
       )}&contractType=${contractType}&fromDate=${fromDate}&toDate=${toDate}`,
     );
@@ -201,7 +207,7 @@ export class SchwabClient {
   async getOptionChain(symbol: string, expiry: Date): Promise<OptionQuote[]> {
     const expiryStr = format(expiry, "yyyy-MM-dd");
     const data = await this.makeApiRequest<SchwabOptionChainResponse>(
-      `/marketdata/v1/chains?symbol=${encodeURIComponent(
+      `/marketdata/v1/chains?symbol=${this.encodeSymbol(
         symbol,
       )}&fromDate=${expiryStr}&toDate=${expiryStr}`,
     );
