@@ -191,11 +191,14 @@ export class SchwabClient {
       )}&contractType=${contractType}&fromDate=${fromDate}&toDate=${toDate}`,
     );
 
-    if (!data.putExpDateMap) {
+    const expDateMap =
+      contractType === "PUT" ? data.putExpDateMap : data.callExpDateMap;
+
+    if (!expDateMap) {
       return [];
     }
 
-    const expiries = Object.keys(data.putExpDateMap).map((key) => {
+    const expiries = Object.keys(expDateMap).map((key) => {
       // Key format is "2024-01-19:30" (date:DTE)
       const dateStr = key.split(":")[0] ?? key;
       return parse(dateStr, "yyyy-MM-dd", new Date());
