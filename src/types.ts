@@ -1,12 +1,7 @@
 // ---- Quote types (from Schwab Market Data API) ----
 
 export type SchwabQuoteAssetMainType =
-  | "EQUITY"
-  | "OPTION"
-  | "INDEX"
-  | "MUTUAL_FUND"
-  | "FUTURE"
-  | "FOREX";
+  "EQUITY" | "OPTION" | "INDEX" | "MUTUAL_FUND" | "FUTURE" | "FOREX";
 
 export interface SchwabQuoteReference {
   cusip?: string;
@@ -250,9 +245,7 @@ export type SchwabDivCapGains = "REINVEST" | "PAYOUT";
 // ---- Special instructions / strategy / status ----
 
 export type SchwabSpecialInstruction =
-  | "ALL_OR_NONE"
-  | "DO_NOT_REDUCE"
-  | "ALL_OR_NONE_DO_NOT_REDUCE";
+  "ALL_OR_NONE" | "DO_NOT_REDUCE" | "ALL_OR_NONE_DO_NOT_REDUCE";
 
 export type SchwabOrderStrategyType =
   | "SINGLE"
@@ -310,10 +303,7 @@ export interface SchwabAccountBaseInstrument {
 }
 
 export type SchwabCashEquivalentType =
-  | "SWEEP_VEHICLE"
-  | "SAVINGS"
-  | "MONEY_MARKET_FUND"
-  | "UNKNOWN";
+  "SWEEP_VEHICLE" | "SAVINGS" | "MONEY_MARKET_FUND" | "UNKNOWN";
 
 export interface SchwabAccountCashEquivalent extends SchwabAccountBaseInstrument {
   assetType: SchwabAssetType;
@@ -592,10 +582,7 @@ export type SchwabMoversIndexSymbol =
   | "OPTION_CALL";
 
 export type SchwabMoversSort =
-  | "VOLUME"
-  | "TRADES"
-  | "PERCENT_CHANGE_UP"
-  | "PERCENT_CHANGE_DOWN";
+  "VOLUME" | "TRADES" | "PERCENT_CHANGE_UP" | "PERCENT_CHANGE_DOWN";
 
 export type SchwabMoversFrequency = 0 | 1 | 5 | 10 | 30 | 60;
 
