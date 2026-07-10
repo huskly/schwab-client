@@ -536,6 +536,41 @@ export class SchwabClient {
     return { orderId };
   }
 
+  /**
+   * Cancel a working order for a specific account.
+   *
+   * Schwab responds with an empty body on success. The cancel is asynchronous:
+   * the order transitions WORKING -> PENDING_CANCEL -> CANCELED (and can still
+   * fill before the cancel takes effect), so callers must poll
+   * {@link fetchAccountOrders} to confirm the terminal status rather than assume
+   * cancellation completed.
+   */
+  async cancelOrder(accountHash: string, orderId: string): Promise<void> {
+    if (!accountHash) {
+      throw new Error("Account hash is required to cancel an order");
+    }
+    if (!orderId) {
+      throw new Error("Order id is required to cancel an order");
+    }
+    const url = `${SCHWAB_API_BASE_URL}/trader/v1/accounts/${accountHash}/orders/${orderId}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(
+        `Failed to cancel order ${orderId}: ${String(response.status)} ${
+          response.statusText
+        } - ${errorBody}`,
+      );
+    }
+  }
+
   async getUserPreference(): Promise<SchwabUserPreference> {
     return await this.makeApiRequest<SchwabUserPreference>(
       "/trader/v1/userPreference",

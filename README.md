@@ -229,6 +229,7 @@ const today = client.today();
 | `fetchOrders(options)`                     | Get orders across all accounts  |
 | `fetchAccountOrders(accountHash, options)` | Get orders for specific account |
 | `placeOrder(accountHash, order)`           | Place a new order               |
+| `cancelOrder(accountHash, order)`          | Cancel an existing order        |
 
 ## Types
 
