@@ -24,6 +24,7 @@
     "format:check": "prettier --check 'src/**/*.ts' 'package.json' 'tsconfig.json'",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
+    "test": "npm run build && node --test test/*.test.js",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
