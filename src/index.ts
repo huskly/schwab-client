@@ -1,6 +1,14 @@
 // Main client
 export { SchwabClient } from "./schwabClient.js";
 
+// Order economics helpers
+export { getOrderFees, getRealizedFills } from "./orderEconomics.js";
+export type {
+  SchwabOrderFeeItem,
+  SchwabOrderFees,
+  SchwabRealizedFill,
+} from "./orderEconomics.js";
+
 // Types
 export type {
   // Quote types

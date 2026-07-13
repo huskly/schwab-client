@@ -153,6 +153,37 @@ const orders = await client.fetchOrders({
 });
 ```
 
+`fetchAccountOrders()` and `fetchOrders()` return Schwab's order payloads
+unchanged, including `orderActivityCollection` on terminal orders when Schwab
+populates it. Use `getRealizedFills()` to aggregate serial/partial executions
+and correlate each fill with its order-leg symbol:
+
+```typescript
+import { getOrderFees, getRealizedFills } from "@huskly/schwab-client";
+
+const [order] = await client.fetchAccountOrders(accountHash, {
+  fromEnteredTime,
+  toEnteredTime,
+  status: "FILLED",
+});
+const fills = getRealizedFills(order);
+// [{ legId, instrumentId, symbol, filledQuantity, averageFillPrice }]
+
+const transactions = await client.fetchAccountTransactionHistory(
+  accountHash,
+  fromEnteredTime,
+  toEnteredTime,
+);
+const fees = getOrderFees(order, transactions);
+// { totalFees, items, transactions }
+```
+
+Fee correlation uses `SchwabTransaction.orderId` and only includes `TRADE`
+transactions. Schwab exposes fees on individual `transferItems`; `items`
+preserves their symbols and transfer-item types. The payload does not provide a
+reliable normalized commission-versus-regulatory-fee classification, so callers
+should not infer one from an unlabeled fee.
+
 #### Place an Order
 
 ```typescript
