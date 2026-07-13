@@ -36,23 +36,30 @@ interface FillAccumulator {
   weightedPrice: number;
 }
 
+interface MatchingOrderLeg {
+  leg: SchwabOrderLeg;
+  index: number;
+}
+
 function matchingOrderLeg(
   executionLeg: SchwabExecutionLeg,
   orderLegs: SchwabOrderLeg[],
-): SchwabOrderLeg | undefined {
+): MatchingOrderLeg | undefined {
   if (executionLeg.legId !== undefined) {
-    const byLegId = orderLegs.find((leg) => leg.legId === executionLeg.legId);
-    if (byLegId) return byLegId;
+    const index = orderLegs.findIndex(
+      (leg) => leg.legId === executionLeg.legId,
+    );
+    if (index !== -1) return { leg: orderLegs[index], index };
   }
 
   if (executionLeg.instrumentId !== undefined) {
-    const byInstrumentId = orderLegs.find(
+    const index = orderLegs.findIndex(
       (leg) => leg.instrument?.instrumentId === executionLeg.instrumentId,
     );
-    if (byInstrumentId) return byInstrumentId;
+    if (index !== -1) return { leg: orderLegs[index], index };
   }
 
-  return orderLegs.length === 1 ? orderLegs[0] : undefined;
+  return orderLegs.length === 1 ? { leg: orderLegs[0], index: 0 } : undefined;
 }
 
 /**
@@ -79,17 +86,18 @@ export function getRealizedFills(order: SchwabOrder): SchwabRealizedFill[] {
         continue;
       }
 
-      const orderLeg = matchingOrderLeg(executionLeg, orderLegs);
+      const match = matchingOrderLeg(executionLeg, orderLegs);
+      const orderLeg = match?.leg;
       const legId = executionLeg.legId ?? orderLeg?.legId;
       const instrumentId =
         executionLeg.instrumentId ?? orderLeg?.instrument?.instrumentId;
       const key =
-        legId !== undefined
-          ? `leg:${String(legId)}`
-          : instrumentId !== undefined
-            ? `instrument:${String(instrumentId)}`
-            : orderLegs.length === 1
-              ? "single-leg"
+        match !== undefined
+          ? `order-leg:${String(match.index)}`
+          : legId !== undefined
+            ? `leg:${String(legId)}`
+            : instrumentId !== undefined
+              ? `instrument:${String(instrumentId)}`
               : undefined;
 
       // An execution leg without any usable correlation identifier cannot be

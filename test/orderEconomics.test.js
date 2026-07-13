@@ -100,6 +100,42 @@ test("getRealizedFills correlates by instrument id and skips incomplete fills", 
   ]);
 });
 
+test("getRealizedFills uses one bucket when execution identifiers vary", () => {
+  const fills = getRealizedFills({
+    orderLegCollection: [
+      {
+        instrument: {
+          assetType: "OPTION",
+          instrumentId: 404,
+          symbol: "SPY   260717P00550000",
+        },
+      },
+    ],
+    orderActivityCollection: [
+      {
+        activityType: "EXECUTION",
+        executionLegs: [
+          { legId: 7, instrumentId: 404, price: 1.2, quantity: 1 },
+        ],
+      },
+      {
+        activityType: "EXECUTION",
+        executionLegs: [{ instrumentId: 404, price: 1.5, quantity: 2 }],
+      },
+    ],
+  });
+
+  assert.deepEqual(fills, [
+    {
+      legId: 7,
+      instrumentId: 404,
+      symbol: "SPY   260717P00550000",
+      filledQuantity: 3,
+      averageFillPrice: 1.4000000000000001,
+    },
+  ]);
+});
+
 test("fetchAccountOrders preserves terminal order execution activities", async () => {
   const originalFetch = globalThis.fetch;
   const responseBody = [
