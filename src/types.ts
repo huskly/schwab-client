@@ -382,7 +382,11 @@ export interface SchwabOrderLeg {
 }
 
 export type SchwabOrderActivityType = "EXECUTION" | "ORDER_ACTION";
-export type SchwabExecutionType = "FILL";
+// "FILL" is Schwab-documented. "CANCELED" is undocumented but observed in production: a
+// canceled order's orderActivityCollection carries an activityType: "EXECUTION" record tagged
+// executionType: "CANCELED", with executionLegs reporting the canceled quantity at price 0 -
+// not a real fill. getRealizedFills() must not count it as one.
+export type SchwabExecutionType = "FILL" | "CANCELED";
 
 export interface SchwabExecutionLeg {
   legId?: number;

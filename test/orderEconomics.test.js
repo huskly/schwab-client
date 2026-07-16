@@ -67,6 +67,80 @@ test("getRealizedFills calculates quantity-weighted prices by order leg", () => 
   ]);
 });
 
+test("getRealizedFills ignores a CANCELED execution activity (no real fill)", () => {
+  // Real order captured from production: a SELL_TO_OPEN entry order that never filled.
+  // Schwab still emits an orderActivityCollection entry for the cancellation itself, tagged
+  // activityType: "EXECUTION" / executionType: "CANCELED", with executionLegs reporting the
+  // canceled quantity at price 0. Counting this as a fill fabricates a $0-premium position.
+  const fills = getRealizedFills({
+    orderLegCollection: [
+      {
+        orderLegType: "OPTION",
+        legId: 1,
+        instrument: {
+          assetType: "OPTION",
+          instrumentId: 242035482,
+          symbol: "MSTR  260821C00130000",
+        },
+        instruction: "SELL_TO_OPEN",
+        positionEffect: "OPENING",
+        quantity: 2,
+      },
+    ],
+    orderId: 1007210421190,
+    status: "CANCELED",
+    filledQuantity: 0,
+    orderActivityCollection: [
+      {
+        activityType: "EXECUTION",
+        executionType: "CANCELED",
+        quantity: 2,
+        orderRemainingQuantity: 0,
+        executionLegs: [{ legId: 1, quantity: 2, price: 0, instrumentId: 242035482 }],
+      },
+    ],
+  });
+
+  assert.deepEqual(fills, []);
+});
+
+test("getRealizedFills counts only the real FILL when a partial fill is followed by a cancel", () => {
+  const fills = getRealizedFills({
+    orderLegCollection: [
+      {
+        legId: 1,
+        instrument: {
+          assetType: "OPTION",
+          instrumentId: 242035482,
+          symbol: "MSTR  260821C00130000",
+        },
+      },
+    ],
+    orderActivityCollection: [
+      {
+        activityType: "EXECUTION",
+        executionType: "FILL",
+        executionLegs: [{ legId: 1, instrumentId: 242035482, price: 1.96, quantity: 1 }],
+      },
+      {
+        activityType: "EXECUTION",
+        executionType: "CANCELED",
+        executionLegs: [{ legId: 1, instrumentId: 242035482, price: 0, quantity: 1 }],
+      },
+    ],
+  });
+
+  assert.deepEqual(fills, [
+    {
+      legId: 1,
+      instrumentId: 242035482,
+      symbol: "MSTR  260821C00130000",
+      filledQuantity: 1,
+      averageFillPrice: 1.96,
+    },
+  ]);
+});
+
 test("getRealizedFills correlates by instrument id and skips incomplete fills", () => {
   const fills = getRealizedFills({
     orderLegCollection: [

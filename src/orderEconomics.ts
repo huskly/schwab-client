@@ -66,6 +66,11 @@ function matchingOrderLeg(
  * Aggregate an order's EXECUTION activities into one realized fill per order
  * leg. Only execution legs with finite, positive quantities and finite prices
  * are included.
+ *
+ * Only `executionType: "FILL"` activities count as real fills. A canceled order also gets an
+ * activityType: "EXECUTION" record (executionType: "CANCELED") whose executionLegs report the
+ * canceled quantity at price 0 - allowlisting FILL (rather than blocking CANCELED) keeps this
+ * correct against any other non-fill executionType Schwab emits but doesn't document.
  */
 export function getRealizedFills(order: SchwabOrder): SchwabRealizedFill[] {
   const orderLegs = order.orderLegCollection ?? [];
@@ -73,6 +78,11 @@ export function getRealizedFills(order: SchwabOrder): SchwabRealizedFill[] {
 
   for (const activity of order.orderActivityCollection ?? []) {
     if (activity.activityType !== "EXECUTION") continue;
+    if (
+      activity.executionType !== undefined &&
+      activity.executionType !== "FILL"
+    )
+      continue;
 
     for (const executionLeg of activity.executionLegs ?? []) {
       const { price, quantity } = executionLeg;
