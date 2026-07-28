@@ -97,6 +97,8 @@ export interface OptionQuote {
   ask: number | null;
   mid: number; // (bid + ask) / 2, or whatever you define
   delta: number; // negative for puts
+  volume: number | null;
+  openInterest: number | null;
 }
 
 export interface PutCreditSpread {

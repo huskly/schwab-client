@@ -48,14 +48,14 @@ interface SchwabOptionContract {
   lowPrice: number;
   openPrice: number;
   closePrice: number;
-  totalVolume: number;
+  totalVolume?: number | null;
   tradeDate: number | null;
   delta: number;
   gamma: number;
   theta: number;
   vega: number;
   rho: number;
-  openInterest: number;
+  openInterest?: number | null;
   strikePrice: number;
   expirationDate: string;
   daysToExpiration: number;
@@ -245,6 +245,8 @@ export class SchwabClient {
               ask: contract.ask > 0 ? contract.ask : null,
               mid: contract.mark,
               delta: contract.delta,
+              volume: contract.totalVolume ?? null,
+              openInterest: contract.openInterest ?? null,
             });
           }
         }

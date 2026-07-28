@@ -78,10 +78,15 @@ for (const option of chain) {
   console.log(
     `${option.symbol}: ${option.strike} ${option.isCall ? "C" : "P"} @ ${
       option.mid
-    }`,
+    } (volume: ${option.volume ?? "unavailable"}, open interest: ${
+      option.openInterest ?? "unavailable"
+    })`,
   );
 }
 ```
+
+`volume` and `openInterest` are `number | null`. A value of `0` is preserved;
+`null` means Schwab did not provide the value.
 
 #### Get Single Option Quote
 
