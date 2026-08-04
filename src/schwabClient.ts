@@ -16,6 +16,7 @@ import type {
 import type {
   SchwabAccount,
   SchwabAccountTransactionHistory,
+  SchwabCurrentBalances,
   SchwabPosition,
   SchwabTransaction,
   SchwabUserPreference,
@@ -283,29 +284,14 @@ export class SchwabClient {
     return accounts[0].securitiesAccount.currentBalances.liquidationValue;
   }
 
-  async getAccountBalances(): Promise<{
-    liquidationValue: number;
-    cashBalance: number;
-    availableFunds: number;
-    marginBalance: number;
-    buyingPower: number;
-    equity: number;
-  }> {
+  async getAccountBalances(): Promise<SchwabCurrentBalances> {
     const accounts = await this.makeApiRequest<SchwabAccount[]>(
       "/trader/v1/accounts?fields=positions",
     );
     if (accounts.length === 0) {
       throw new Error("No Schwab account found");
     }
-    const balances = accounts[0].securitiesAccount.currentBalances;
-    return {
-      liquidationValue: balances.liquidationValue,
-      cashBalance: balances.cashBalance,
-      availableFunds: balances.availableFunds,
-      marginBalance: balances.marginBalance,
-      buyingPower: balances.buyingPower,
-      equity: balances.equity,
-    };
+    return accounts[0].securitiesAccount.currentBalances;
   }
 
   async getPositions(symbol?: string): Promise<SchwabPosition[]> {

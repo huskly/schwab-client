@@ -11,12 +11,27 @@ test("getAccountBalances returns distinct available funds and margin balance", a
         accountNumber: "123456789",
         positions: [],
         currentBalances: {
+          availableFunds: 2500,
+          availableFundsNonMarginableTrade: 2400,
+          buyingPower: 5000,
+          buyingPowerNonMarginableTrade: 4800,
+          dayTradingBuyingPower: 10000,
+          dayTradingBuyingPowerCall: 0,
+          equity: 9000,
+          equityPercentage: 90,
+          longMarginValue: 8000,
+          maintenanceCall: 0,
+          maintenanceRequirement: 1200,
+          marginBalance: 3750,
+          regTCall: 0,
+          shortBalance: 0,
+          shortMarginValue: 0,
+          sma: 3000,
+          isInCall: 0,
+          stockBuyingPower: 5000,
+          optionBuyingPower: 4500,
           liquidationValue: 10000,
           cashBalance: 1500,
-          availableFunds: 2500,
-          marginBalance: 3750,
-          buyingPower: 5000,
-          equity: 9000,
         },
       },
     },
@@ -31,14 +46,7 @@ test("getAccountBalances returns distinct available funds and margin balance", a
   try {
     const balances = await new SchwabClient("token").getAccountBalances();
 
-    assert.deepEqual(balances, {
-      liquidationValue: 10000,
-      cashBalance: 1500,
-      availableFunds: 2500,
-      marginBalance: 3750,
-      buyingPower: 5000,
-      equity: 9000,
-    });
+    assert.deepEqual(balances, responseBody[0].securitiesAccount.currentBalances);
   } finally {
     globalThis.fetch = originalFetch;
   }
