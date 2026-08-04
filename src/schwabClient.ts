@@ -287,6 +287,7 @@ export class SchwabClient {
     liquidationValue: number;
     cashBalance: number;
     availableFunds: number;
+    marginBalance: number;
     buyingPower: number;
     equity: number;
   }> {
@@ -301,6 +302,7 @@ export class SchwabClient {
       liquidationValue: balances.liquidationValue,
       cashBalance: balances.cashBalance,
       availableFunds: balances.availableFunds,
+      marginBalance: balances.marginBalance,
       buyingPower: balances.buyingPower,
       equity: balances.equity,
     };

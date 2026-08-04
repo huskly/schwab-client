@@ -3,6 +3,7 @@ export interface SchwabAccountDetails {
   positions: SchwabAccountPosition[];
   liquidationValue: number;
   availableFunds: number;
+  marginBalance: number;
   buyingPower: number;
   cashBalance: number;
 }
@@ -31,6 +32,7 @@ export interface SchwabAccount {
     currentBalances: {
       equity: number;
       availableFunds: number;
+      marginBalance: number;
       buyingPower: number;
       cashBalance: number;
       liquidationValue: number;
