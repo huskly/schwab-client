@@ -107,6 +107,8 @@ const option = await client.getOptionQuote({
 const balances = await client.getAccountBalances();
 console.log(`Equity: $${balances.equity}`);
 console.log(`Buying Power: $${balances.buyingPower}`);
+console.log(`Available Funds: $${balances.availableFunds}`);
+console.log(`Margin Balance: $${balances.marginBalance}`);
 console.log(`Cash: $${balances.cashBalance}`);
 ```
 
