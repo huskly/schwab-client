@@ -23,20 +23,37 @@ export interface SchwabAccountPosition {
 }
 
 // Raw API types
+export interface SchwabCurrentBalances {
+  availableFunds: number;
+  availableFundsNonMarginableTrade: number;
+  buyingPower: number;
+  buyingPowerNonMarginableTrade: number;
+  dayTradingBuyingPower: number;
+  dayTradingBuyingPowerCall: number;
+  equity: number;
+  equityPercentage: number;
+  longMarginValue: number;
+  maintenanceCall: number;
+  maintenanceRequirement: number;
+  marginBalance: number;
+  regTCall: number;
+  shortBalance: number;
+  shortMarginValue: number;
+  sma: number;
+  isInCall: number;
+  stockBuyingPower: number;
+  optionBuyingPower: number;
+  cashBalance: number;
+  liquidationValue: number;
+}
+
 export interface SchwabAccount {
   hashValue?: string;
   securitiesAccount: {
     accountNumber: string;
     hashValue?: string;
     positions: SchwabPosition[];
-    currentBalances: {
-      equity: number;
-      availableFunds: number;
-      marginBalance: number;
-      buyingPower: number;
-      cashBalance: number;
-      liquidationValue: number;
-    };
+    currentBalances: SchwabCurrentBalances;
   };
 }
 
