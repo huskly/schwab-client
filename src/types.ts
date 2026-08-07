@@ -99,6 +99,15 @@ export interface OptionQuote {
   delta: number; // negative for puts
   volume: number | null;
   openInterest: number | null;
+  /** Provider quote timestamp in epoch milliseconds; null when Schwab omits it. */
+  quoteTime: number | null;
+  /** Provider last-trade timestamp in epoch milliseconds; null when Schwab omits it. */
+  tradeTime: number | null;
+  /**
+   * Whether Schwab marked this chain response as delayed data. `null` means the response did
+   * not say, which a consumer must not read as "live".
+   */
+  delayed: boolean | null;
 }
 
 export interface PutCreditSpread {
