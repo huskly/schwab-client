@@ -25,9 +25,24 @@ import { differenceInDays, format, parse, startOfYear } from "date-fns";
 
 const SCHWAB_API_BASE_URL = "https://api.schwabapi.com";
 
+/**
+ * Normalize a Schwab epoch-millisecond field into a usable timestamp.
+ *
+ * Schwab reports an unknown timestamp as `0`, `null`, or an absent field. All three mean the
+ * same thing to a consumer - "this provider did not tell me when the data is from" - so they
+ * collapse to `null` rather than to a 1970 date that would look like extremely stale data.
+ */
+function epochMillis(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
 interface SchwabOptionChainResponse {
   symbol: string;
   status: string;
+  /** Schwab marks the whole chain response delayed or live; absent on some responses. */
+  isDelayed?: boolean;
   underlying?: { symbol: string; last: number };
   putExpDateMap?: Record<string, Record<string, SchwabOptionContract[]>>;
   callExpDateMap?: Record<string, Record<string, SchwabOptionContract[]>>;
@@ -35,6 +50,8 @@ interface SchwabOptionChainResponse {
 
 interface SchwabOptionContract {
   putCall: "PUT" | "CALL";
+  quoteTimeInLong?: number | null;
+  tradeTimeInLong?: number | null;
   symbol: string;
   description: string;
   exchangeName: string;
@@ -248,6 +265,9 @@ export class SchwabClient {
               delta: contract.delta,
               volume: contract.totalVolume ?? null,
               openInterest: contract.openInterest ?? null,
+              quoteTime: epochMillis(contract.quoteTimeInLong),
+              tradeTime: epochMillis(contract.tradeTimeInLong),
+              delayed: data.isDelayed ?? null,
             });
           }
         }
