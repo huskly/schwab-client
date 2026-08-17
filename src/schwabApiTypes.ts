@@ -101,6 +101,7 @@ export interface SchwabTransferItem {
   amount?: number;
   cost?: number;
   fee?: number;
+  feeType?: string;
   price?: number;
   quantity?: number;
   transferItemType?: string;

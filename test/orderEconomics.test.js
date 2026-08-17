@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  getOrderFees,
-  getRealizedFills,
-  SchwabClient,
-} from "../dist/index.js";
+import { getOrderFees, getRealizedFills, SchwabClient } from "../dist/index.js";
 
 test("getRealizedFills calculates quantity-weighted prices by order leg", () => {
   const fills = getRealizedFills({
@@ -96,7 +92,9 @@ test("getRealizedFills ignores a CANCELED execution activity (no real fill)", ()
         executionType: "CANCELED",
         quantity: 2,
         orderRemainingQuantity: 0,
-        executionLegs: [{ legId: 1, quantity: 2, price: 0, instrumentId: 242035482 }],
+        executionLegs: [
+          { legId: 1, quantity: 2, price: 0, instrumentId: 242035482 },
+        ],
       },
     ],
   });
@@ -120,12 +118,16 @@ test("getRealizedFills counts only the real FILL when a partial fill is followed
       {
         activityType: "EXECUTION",
         executionType: "FILL",
-        executionLegs: [{ legId: 1, instrumentId: 242035482, price: 1.96, quantity: 1 }],
+        executionLegs: [
+          { legId: 1, instrumentId: 242035482, price: 1.96, quantity: 1 },
+        ],
       },
       {
         activityType: "EXECUTION",
         executionType: "CANCELED",
-        executionLegs: [{ legId: 1, instrumentId: 242035482, price: 0, quantity: 1 }],
+        executionLegs: [
+          { legId: 1, instrumentId: 242035482, price: 0, quantity: 1 },
+        ],
       },
     ],
   });
@@ -245,6 +247,42 @@ test("fetchAccountOrders preserves terminal order execution activities", async (
   }
 });
 
+test("fetchAccountOrder reads one exact order by broker id", async () => {
+  const originalFetch = globalThis.fetch;
+  const responseBody = {
+    orderId: 52,
+    status: "FILLED",
+    orderActivityCollection: [
+      {
+        activityType: "EXECUTION",
+        executionType: "FILL",
+        executionLegs: [{ legId: 1, price: 1.25, quantity: 2 }],
+      },
+    ],
+  };
+  let requestedUrl = null;
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return new Response(JSON.stringify(responseBody), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const client = new SchwabClient("token");
+    const order = await client.fetchAccountOrder("account-hash", "52");
+
+    assert.equal(
+      requestedUrl,
+      "https://api.schwabapi.com/trader/v1/accounts/account-hash/orders/52",
+    );
+    assert.deepEqual(order, responseBody);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("getOrderFees correlates TRADE transactions by order id", () => {
   const transactions = [
     {
@@ -320,6 +358,51 @@ test("getOrderFees correlates TRADE transactions by order id", () => {
       fee: 0.1,
     },
   ]);
+});
+
+test("getOrderFees reads currency fee transfer items from live Schwab trades", () => {
+  const transaction = {
+    activityId: 10,
+    time: "2026-08-10T14:15:53Z",
+    accountNumber: "123",
+    type: "TRADE",
+    status: "VALID",
+    subAccount: "MARGIN",
+    tradeDate: "2026-08-10",
+    positionId: 1,
+    orderId: 52,
+    netAmount: 100,
+    transferItems: [
+      {
+        instrument: { assetType: "CURRENCY", symbol: "CURRENCY_USD" },
+        amount: 0.5,
+        cost: -0.5,
+        feeType: "COMMISSION",
+      },
+      {
+        instrument: { assetType: "CURRENCY", symbol: "CURRENCY_USD" },
+        amount: 0.01,
+        cost: -0.01,
+        feeType: "OPT_REG_FEE",
+      },
+      {
+        instrument: { assetType: "OPTION", symbol: "SPY   260717C00600000" },
+        amount: -1,
+        cost: 100.51,
+      },
+    ],
+  };
+
+  const result = getOrderFees({ orderId: 52 }, [transaction]);
+
+  assert.equal(result.totalFees, 0.51);
+  assert.deepEqual(
+    result.items.map(({ feeType, fee }) => ({ feeType, fee })),
+    [
+      { feeType: "COMMISSION", fee: 0.5 },
+      { feeType: "OPT_REG_FEE", fee: 0.01 },
+    ],
+  );
 });
 
 test("getOrderFees rejects an order without an id", () => {

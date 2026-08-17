@@ -508,6 +508,22 @@ export class SchwabClient {
     );
   }
 
+  /** Read one exact order for a specific account by its broker order ID. */
+  async fetchAccountOrder(
+    accountHash: string,
+    orderId: string,
+  ): Promise<SchwabOrder> {
+    if (!accountHash) {
+      throw new Error("Account hash is required to fetch an order");
+    }
+    if (!orderId) {
+      throw new Error("Order id is required to fetch an order");
+    }
+    return await this.makeApiRequest<SchwabOrder>(
+      `/trader/v1/accounts/${encodeURIComponent(accountHash)}/orders/${encodeURIComponent(orderId)}`,
+    );
+  }
+
   /**
    * Place an order for a specific account.
    * Returns the order ID from the Location header on success.

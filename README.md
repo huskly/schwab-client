@@ -186,10 +186,10 @@ const fees = getOrderFees(order, transactions);
 ```
 
 Fee correlation uses `SchwabTransaction.orderId` and only includes `TRADE`
-transactions. Schwab exposes fees on individual `transferItems`; `items`
-preserves their symbols and transfer-item types. The payload does not provide a
-reliable normalized commission-versus-regulatory-fee classification, so callers
-should not infer one from an unlabeled fee.
+transactions. Schwab can expose a fee either in `transferItem.fee` or as the
+absolute cost of a currency transfer item with `feeType`. `items` preserves the
+symbols, transfer-item types, and fee types that Schwab returns. Callers must not
+infer a fee category when Schwab does not label it.
 
 #### Place an Order
 
@@ -266,6 +266,7 @@ const today = client.today();
 | ------------------------------------------ | ------------------------------- |
 | `fetchOrders(options)`                     | Get orders across all accounts  |
 | `fetchAccountOrders(accountHash, options)` | Get orders for specific account |
+| `fetchAccountOrder(accountHash, orderId)`  | Get one exact order by ID       |
 | `placeOrder(accountHash, order)`           | Place a new order               |
 | `cancelOrder(accountHash, order)`          | Cancel an existing order        |
 

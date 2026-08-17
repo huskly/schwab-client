@@ -17,6 +17,7 @@ export interface SchwabOrderFeeItem {
   activityId: number;
   transactionId?: number;
   transferItemType?: string;
+  feeType?: string;
   symbol?: string;
   fee: number;
 }
@@ -154,19 +155,32 @@ export function getOrderFees(
       transaction.orderId === orderId && transaction.type === "TRADE",
   );
   const items = matchingTransactions.flatMap((transaction) =>
-    (transaction.transferItems ?? []).flatMap((item): SchwabOrderFeeItem[] =>
-      item.fee === undefined || !Number.isFinite(item.fee)
+    (transaction.transferItems ?? []).flatMap((item): SchwabOrderFeeItem[] => {
+      const fee =
+        item.fee !== undefined && Number.isFinite(item.fee)
+          ? item.fee
+          : item.feeType &&
+              item.cost !== undefined &&
+              Number.isFinite(item.cost)
+            ? Math.abs(item.cost)
+            : item.feeType &&
+                item.amount !== undefined &&
+                Number.isFinite(item.amount)
+              ? Math.abs(item.amount)
+              : undefined;
+      return fee === undefined
         ? []
         : [
             {
               activityId: transaction.activityId,
               transactionId: item.transactionId,
               transferItemType: item.transferItemType,
+              ...(item.feeType === undefined ? {} : { feeType: item.feeType }),
               symbol: item.instrument?.symbol,
-              fee: item.fee,
+              fee,
             },
-          ],
-    ),
+          ];
+    }),
   );
 
   return {
