@@ -503,6 +503,42 @@ test("missing broker fields become null while an explicit empty deliverables lis
   assert.deepEqual(result.optionDeliverablesList, []);
 });
 
+test("explicit zero evidence timestamps are preserved as 0, not null", async () => {
+  const body = {
+    symbol: "AAPL",
+    status: "SUCCESS",
+    underlying: { symbol: "AAPL", last: 200 },
+    putExpDateMap: {
+      "2026-08-21:24": {
+        "195.0": [
+          {
+            ...quoteFields(),
+            putCall: "PUT",
+            symbol: "AAPL  260821P00195000",
+            strikePrice: 195,
+            expirationDate: "2026-08-21T20:00:00.000+00:00",
+            quoteTimeInLong: 0,
+            tradeTimeInLong: 0,
+          },
+        ],
+      },
+    },
+  };
+
+  const { result } = await withStub(body, () =>
+    new SchwabClient("token").getOptionContractEvidence({
+      symbol: "AAPL",
+      expiry: EXPIRY,
+      strike: 195,
+      type: "put",
+      optionSymbol: "AAPL  260821P00195000",
+    }),
+  );
+
+  assert.equal(result.quoteTimeInLong, 0);
+  assert.equal(result.tradeTimeInLong, 0);
+});
+
 test("no exact match rejects with a missing-match error", async () => {
   const body = {
     symbol: "AAPL",
