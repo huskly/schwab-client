@@ -158,3 +158,38 @@ export interface SchwabUserPreference {
   streamerInfo: SchwabStreamerInfo;
   offers: SchwabOffer[];
 }
+
+// Exact option contract evidence types (huskly/schwab-client#67).
+//
+// These interfaces carry raw Schwab option-chain evidence for one exact
+// contract. Every optional field is `null` when the broker did not supply it;
+// no value is inferred. `settlementType` is a broker classification string and
+// does not by itself state physical-versus-cash deliverability.
+export interface SchwabOptionDeliverableEvidence {
+  symbol: string;
+  assetType: string;
+  deliverableUnits: string | number;
+  currencyType: string | null;
+}
+
+export interface SchwabOptionContractEvidence {
+  chainSymbol: string;
+  underlyingSymbol: string | null;
+  underlyingIsIndex: boolean | null;
+  optionSymbol: string;
+  optionRoot: string | null;
+  putCall: "PUT" | "CALL";
+  strikePrice: number;
+  expirationDate: string;
+  isIndexOption: boolean | null;
+  isNonStandard: boolean | null;
+  isMini: boolean | null;
+  optionDeliverablesList: SchwabOptionDeliverableEvidence[] | null;
+  multiplier: number | null;
+  settlementType: string | null;
+  expirationType: string | null;
+  deliverableNote: string | null;
+  quoteTimeInLong: number | null;
+  tradeTimeInLong: number | null;
+  isDelayed: boolean | null;
+}
