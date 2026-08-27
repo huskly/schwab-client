@@ -20,6 +20,8 @@ import type {
   SchwabPosition,
   SchwabTransaction,
   SchwabUserPreference,
+  SchwabOptionContractEvidence,
+  SchwabOptionDeliverableEvidence,
 } from "./schwabApiTypes.js";
 import { differenceInDays, format, parse, startOfYear } from "date-fns";
 
@@ -39,19 +41,42 @@ function epochMillis(value: number | null | undefined): number | null {
 }
 
 interface SchwabOptionChainResponse {
-  symbol: string;
+  /** Chain-level underlying symbol; can be absent on a malformed response. */
+  symbol?: string;
   status: string;
   /** Schwab marks the whole chain response delayed or live; absent on some responses. */
   isDelayed?: boolean;
+  /** Schwab marks whether the underlying is an index; absent on some responses. */
+  isIndex?: boolean | null;
   underlying?: { symbol: string; last: number };
-  putExpDateMap?: Record<string, Record<string, SchwabOptionContract[]>>;
-  callExpDateMap?: Record<string, Record<string, SchwabOptionContract[]>>;
+  putExpDateMap?: Record<
+    string,
+    Record<string, SchwabOptionContract[] | undefined> | undefined
+  >;
+  callExpDateMap?: Record<
+    string,
+    Record<string, SchwabOptionContract[] | undefined> | undefined
+  >;
+}
+
+/** Raw Schwab option deliverable line, preserved as broker evidence. */
+interface SchwabOptionDeliverableRaw {
+  symbol: string;
+  assetType: string;
+  deliverableUnits: string | number;
+  currencyType?: string | null;
 }
 
 interface SchwabOptionContract {
   putCall: "PUT" | "CALL";
   quoteTimeInLong?: number | null;
   tradeTimeInLong?: number | null;
+  optionRoot?: string | null;
+  isIndexOption?: boolean | null;
+  isNonStandard?: boolean | null;
+  isMini?: boolean | null;
+  optionDeliverablesList?: SchwabOptionDeliverableRaw[] | null;
+  deliverableNote?: string | null;
   symbol: string;
   description: string;
   exchangeName: string;
@@ -77,9 +102,9 @@ interface SchwabOptionContract {
   strikePrice: number;
   expirationDate: string;
   daysToExpiration: number;
-  expirationType: string;
-  multiplier: number;
-  settlementType: string;
+  expirationType?: string | null;
+  multiplier?: number | null;
+  settlementType?: string | null;
   inTheMoney: boolean;
 }
 
@@ -291,6 +316,123 @@ export class SchwabClient {
     const chain = await this.getOptionChain(symbol, expiry);
     const match = chain.find((o) => o.strike === strike && o.isCall === isCall);
     return match ?? null;
+  }
+
+  /**
+   * Read one exact option contract's raw broker evidence from the chain.
+   *
+   * This is a fresh, read-only lookup. It requires an exact broker option
+   * symbol and validates every requested identity field before it returns.
+   * A missing exact match and an ambiguous identity are refused distinctly.
+   *
+   * Fields are raw Schwab evidence: optional fields are `null` when the broker
+   * did not supply them, and `settlementType` is a broker classification that
+   * does not by itself state physical-versus-cash deliverability. No value is
+   * inferred from OSI text, root, multiplier, settlement type, or absence.
+   */
+  async getOptionContractEvidence(args: {
+    symbol: string;
+    expiry: Date;
+    strike: number;
+    type: "call" | "put";
+    optionSymbol: string;
+  }): Promise<SchwabOptionContractEvidence> {
+    const { symbol, expiry, strike, type, optionSymbol } = args;
+    const contractType = type === "call" ? "CALL" : "PUT";
+    const expiryStr = format(expiry, "yyyy-MM-dd");
+
+    const params = new URLSearchParams({
+      symbol,
+      contractType,
+      strike: String(strike),
+      fromDate: expiryStr,
+      toDate: expiryStr,
+      strategy: "SINGLE",
+      includeUnderlyingQuote: "true",
+    });
+    const data = await this.makeApiRequest<SchwabOptionChainResponse>(
+      `/marketdata/v1/chains?${params.toString()}`,
+    );
+
+    if (
+      typeof data.symbol !== "string" ||
+      data.symbol.toUpperCase() !== symbol.toUpperCase()
+    ) {
+      throw new Error(
+        `Missing or mismatched Schwab option chain identity: requested ${symbol}, received ${
+          data.symbol ?? "none"
+        }`,
+      );
+    }
+
+    const expDateMap =
+      contractType === "PUT" ? data.putExpDateMap : data.callExpDateMap;
+
+    // Read only the requested right's map. Do not trust map keys; match the
+    // returned contract fields directly.
+    const rows: SchwabOptionContract[] = [];
+    for (const strikeMap of Object.values(expDateMap ?? {})) {
+      for (const contracts of Object.values(strikeMap ?? {})) {
+        for (const contract of contracts ?? []) {
+          rows.push(contract);
+        }
+      }
+    }
+
+    const matches = rows.filter(
+      (contract) =>
+        contract.symbol === optionSymbol &&
+        contract.putCall === contractType &&
+        contract.strikePrice === strike &&
+        contract.expirationDate.slice(0, 10) === expiryStr,
+    );
+
+    if (matches.length === 0) {
+      throw new Error(
+        `No exact Schwab option contract matched ${optionSymbol}`,
+      );
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous Schwab option contract identity for ${optionSymbol}`,
+      );
+    }
+
+    const contract = matches[0];
+
+    const orNull = <T>(value: T | null | undefined): T | null => value ?? null;
+
+    const deliverables: SchwabOptionDeliverableEvidence[] | null =
+      contract.optionDeliverablesList == null
+        ? null
+        : contract.optionDeliverablesList.map((deliverable) => ({
+            symbol: deliverable.symbol,
+            assetType: deliverable.assetType,
+            deliverableUnits: deliverable.deliverableUnits,
+            currencyType: orNull(deliverable.currencyType),
+          }));
+
+    return {
+      chainSymbol: data.symbol,
+      underlyingSymbol: orNull(data.underlying?.symbol),
+      underlyingIsIndex: orNull(data.isIndex),
+      optionSymbol: contract.symbol,
+      optionRoot: orNull(contract.optionRoot),
+      putCall: contract.putCall,
+      strikePrice: contract.strikePrice,
+      expirationDate: contract.expirationDate,
+      isIndexOption: orNull(contract.isIndexOption),
+      isNonStandard: orNull(contract.isNonStandard),
+      isMini: orNull(contract.isMini),
+      optionDeliverablesList: deliverables,
+      multiplier: orNull(contract.multiplier),
+      settlementType: orNull(contract.settlementType),
+      expirationType: orNull(contract.expirationType),
+      deliverableNote: orNull(contract.deliverableNote),
+      quoteTimeInLong: orNull(contract.quoteTimeInLong),
+      tradeTimeInLong: orNull(contract.tradeTimeInLong),
+      isDelayed: orNull(data.isDelayed),
+    };
   }
 
   async getAccountEquity(): Promise<number> {

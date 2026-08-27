@@ -99,6 +99,35 @@ const option = await client.getOptionQuote({
 });
 ```
 
+#### Get Exact Option Contract Evidence
+
+```typescript
+const evidence = await client.getOptionContractEvidence({
+  symbol: "SPY",
+  expiry: new Date("2025-01-17"),
+  strike: 600,
+  type: "call",
+  optionSymbol: "SPY   250117C00600000",
+});
+console.log(evidence.optionDeliverablesList, evidence.settlementType);
+```
+
+`getOptionContractEvidence()` is a fresh, read-only lookup. It requires the
+exact broker `optionSymbol` (with the broker's spacing) and validates the
+underlying `symbol`, `type`, `strike`, and `expiry` before it returns. A
+missing exact match rejects with `No exact Schwab option contract matched`;
+two matching rows reject with `Ambiguous Schwab option contract identity`; a
+missing or mismatched chain symbol rejects with `Missing or mismatched Schwab
+option chain identity`.
+
+The returned fields are raw broker evidence. Optional fields such as
+`optionRoot`, `multiplier`, `optionDeliverablesList`, `settlementType`,
+`expirationType`, `deliverableNote`, `quoteTimeInLong`, and `tradeTimeInLong`
+are `null` when Schwab did not supply them; an explicitly empty
+`optionDeliverablesList` stays `[]`. `settlementType` is a broker
+classification string and does not by itself state physical-versus-cash
+deliverability.
+
 ### Account
 
 #### Get Account Balances
@@ -245,6 +274,7 @@ const today = client.today();
 | `getAvailableExpiries(symbol, contractType, fromDate, toDate)` | Get available option expiration dates          |
 | `getOptionChain(symbol, expiry)`                               | Get full options chain for a symbol and expiry |
 | `getOptionQuote(args)`                                         | Get quote for a specific option contract       |
+| `getOptionContractEvidence(args)`                              | Get raw broker evidence for one exact option contract |
 | `searchInstruments(symbol, projection)`                        | Search for instruments                         |
 | `getMovers(symbolId, sort?, frequency?)`                       | Get top market movers                          |
 
