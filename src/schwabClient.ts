@@ -22,6 +22,7 @@ import type {
   SchwabUserPreference,
   SchwabOptionContractEvidence,
   SchwabOptionDeliverableEvidence,
+  SchwabAccountSettlementEvidence,
 } from "./schwabApiTypes.js";
 import { differenceInDays, format, parse, startOfYear } from "date-fns";
 
@@ -454,6 +455,95 @@ export class SchwabClient {
       throw new Error("No Schwab account found");
     }
     return accounts[0].securitiesAccount.currentBalances;
+  }
+
+  /**
+   * Read one account's raw settlement evidence in a single observation.
+   *
+   * This reads the same accounts endpoint as `getAccountBalances()` and picks
+   * the same account (`accounts[0]`), but keeps the envelope so the account
+   * identity travels with the balances.
+   *
+   * Every figure is attributed to the block it came from and the two blocks
+   * mean different things: `initialBalances` is the START-OF-DAY snapshot and
+   * is the only block carrying cash evidence, while `currentBalances` is the
+   * LIVE block and carries no cash fields at all. The consumer must never
+   * confuse them - an `initial` cash figure does not move intraday.
+   *
+   * Fields are raw Schwab evidence, read defensively off the raw objects:
+   * a present finite `number` is kept; absent, `null`, non-finite, or wrongly
+   * typed values become `null`. Nothing throws for a missing field, nothing is
+   * inferred from an adjacent field, and nothing is defaulted - in particular
+   * `currency` is never assumed to be "USD". Schwab sends no
+   * `securitiesAccount.type` and no currency today, so both are `null` in
+   * practice.
+   *
+   * The payload carries no timestamp, so `observedAtEpochMillis` is minted from
+   * the client clock seam `today()`. The `present*BalanceFieldNames` lists
+   * report the key names present on each raw block, sorted, never their values.
+   */
+  async getAccountSettlementEvidence(): Promise<SchwabAccountSettlementEvidence> {
+    const accounts = await this.makeApiRequest<SchwabAccount[]>(
+      "/trader/v1/accounts?fields=positions",
+    );
+    if (accounts.length === 0) {
+      throw new Error("No Schwab account found");
+    }
+
+    const securitiesAccount = accounts[0].securitiesAccount;
+    // The transport blind-casts the response, so undeclared keys and whole
+    // undeclared blocks may or may not arrive at runtime. Read them off the raw
+    // objects instead of the types.
+    const rawAccount = securitiesAccount as unknown as Record<string, unknown>;
+    const blockOrEmpty = (value: unknown): Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const rawInitial = blockOrEmpty(rawAccount.initialBalances);
+    const rawCurrent = blockOrEmpty(rawAccount.currentBalances);
+    const rawProjected = blockOrEmpty(rawAccount.projectedBalances);
+
+    const numberOrNull = (value: unknown): number | null =>
+      typeof value === "number" && Number.isFinite(value) ? value : null;
+    const stringOrNull = (value: unknown): string | null =>
+      typeof value === "string" ? value : null;
+
+    return {
+      accountNumber: securitiesAccount.accountNumber,
+      accountType: stringOrNull(rawAccount.type),
+      currency: stringOrNull(rawAccount.currency ?? rawCurrent.currency),
+      observedAtEpochMillis: this.today().getTime(),
+      // Start-of-day snapshot. NOT live.
+      initial: {
+        cashBalance: numberOrNull(rawInitial.cashBalance),
+        cashAvailableForTrading: numberOrNull(
+          rawInitial.cashAvailableForTrading,
+        ),
+        unsettledCash: numberOrNull(rawInitial.unsettledCash),
+        totalCash: numberOrNull(rawInitial.totalCash),
+        moneyMarketFund: numberOrNull(rawInitial.moneyMarketFund),
+        pendingDeposits: numberOrNull(rawInitial.pendingDeposits),
+        marginBalance: numberOrNull(rawInitial.marginBalance),
+        longMarginValue: numberOrNull(rawInitial.longMarginValue),
+        isInCall: numberOrNull(rawInitial.isInCall),
+        maintenanceCall: numberOrNull(rawInitial.maintenanceCall),
+        accountValue: numberOrNull(rawInitial.accountValue),
+      },
+      // Live block. Carries no cash fields.
+      current: {
+        availableFunds: numberOrNull(rawCurrent.availableFunds),
+        optionBuyingPower: numberOrNull(rawCurrent.optionBuyingPower),
+        marginBalance: numberOrNull(rawCurrent.marginBalance),
+        longMarginValue: numberOrNull(rawCurrent.longMarginValue),
+        maintenanceCall: numberOrNull(rawCurrent.maintenanceCall),
+        isInCall: numberOrNull(rawCurrent.isInCall),
+        equity: numberOrNull(rawCurrent.equity),
+        liquidationValue: numberOrNull(rawCurrent.liquidationValue),
+      },
+      presentInitialBalanceFieldNames: Object.keys(rawInitial).sort(),
+      presentCurrentBalanceFieldNames: Object.keys(rawCurrent).sort(),
+      presentProjectedBalanceFieldNames: Object.keys(rawProjected).sort(),
+    };
   }
 
   async getPositions(symbol?: string): Promise<SchwabPosition[]> {

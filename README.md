@@ -141,6 +141,39 @@ console.log(`Margin Balance: $${balances.marginBalance}`);
 console.log(`Cash: $${balances.cashBalance}`);
 ```
 
+#### Get Account Settlement Evidence
+
+```typescript
+const evidence = await client.getAccountSettlementEvidence();
+console.log(`Account: ${evidence.accountNumber} (${evidence.accountType})`);
+// Start-of-day cash. NOT live.
+console.log(`Cash at open: ${evidence.initial.cashBalance}`);
+console.log(`Unsettled cash at open: ${evidence.initial.unsettledCash}`);
+// Live margin figures. This block carries no cash fields.
+console.log(`Available funds now: ${evidence.current.availableFunds}`);
+console.log(`Observed at: ${new Date(evidence.observedAtEpochMillis)}`);
+console.log(
+  `Initial fields: ${evidence.presentInitialBalanceFieldNames.join(", ")}`,
+);
+```
+
+One observation of one account, read from the same accounts endpoint as
+`getAccountBalances()` but keeping the account envelope. Every figure is
+attributed to its source block and the blocks must never be confused:
+`initialBalances` (`evidence.initial`) is the START-OF-DAY snapshot and is the
+only block carrying cash evidence, while `currentBalances` (`evidence.current`)
+is live and carries no cash fields at all. `projectedBalances` has the same
+shape as `currentBalances`.
+
+Any field is `null` when Schwab did not supply it, sent a non-finite number, or
+sent the wrong type; nothing is inferred and `currency` is never assumed to be
+`USD`. Schwab sends no `securitiesAccount.type` and no currency today, so
+`accountType` and `currency` are `null` in practice. Schwab sends no timestamp
+on this payload, so `observedAtEpochMillis` comes from the client clock
+(`today()`). `presentInitialBalanceFieldNames`,
+`presentCurrentBalanceFieldNames`, and `presentProjectedBalanceFieldNames` list
+the raw key names of each block only, sorted, never their values.
+
 #### Get Positions
 
 ```typescript
@@ -284,6 +317,7 @@ const today = client.today();
 | ----------------------------------------------- | --------------------------------------- |
 | `getAccountEquity()`                            | Get total account equity                |
 | `getAccountBalances()`                          | Get detailed account balances           |
+| `getAccountSettlementEvidence()`                | Get one raw account settlement reading  |
 | `getPositions(symbol?)`                         | Get account positions                   |
 | `getPutCreditSpreads(symbol)`                   | Get existing PUT option credit spreads  |
 | `fetchAccountNumbers()`                         | Get all linked account numbers          |

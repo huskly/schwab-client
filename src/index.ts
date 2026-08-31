@@ -99,8 +99,12 @@ export type {
   SchwabStreamerInfo,
   SchwabOffer,
   SchwabUserPreference,
+  SchwabCurrentBalances,
   SchwabOptionDeliverableEvidence,
   SchwabOptionContractEvidence,
+  SchwabAccountSettlementEvidence,
+  SchwabInitialSettlementBalances,
+  SchwabCurrentSettlementBalances,
 } from "./schwabApiTypes.js";
 
 // Constants
