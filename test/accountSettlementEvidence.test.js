@@ -34,7 +34,7 @@ function initialBalancesBlock() {
     shortOptionMarketValue: 0,
     shortStockValue: 0,
     totalCash: 1543,
-    isInCall: 0,
+    isInCall: false,
     unsettledCash: 250.1,
     pendingDeposits: 0,
     marginBalance: 3750,
@@ -43,10 +43,22 @@ function initialBalancesBlock() {
   };
 }
 
-// The real Schwab `currentBalances` block: live, and carrying NO cash fields.
+// The real Schwab `currentBalances` block: live, and - as a read-only probe of
+// a real MARGIN account proved - carrying live cash as well as margin figures.
 // `projectedBalances` has the same shape.
 function currentBalancesBlock() {
   return {
+    accruedInterest: 0,
+    cashBalance: 1610.4,
+    cashReceipts: 0,
+    intradayBuyingPowerAmount: 0,
+    liquidationValue: 9600,
+    longMarketValue: 8000,
+    moneyMarketFund: 42.75,
+    pendingDeposits: 0,
+    savings: 0,
+    shortMarketValue: 0,
+    totalCash: 1653.15,
     availableFunds: 2500,
     availableFundsNonMarginableTrade: 2400,
     buyingPower: 5000,
@@ -63,7 +75,7 @@ function currentBalancesBlock() {
     shortBalance: 0,
     shortMarginValue: 0,
     sma: 3000,
-    isInCall: 0,
+    isInCall: false,
     stockBuyingPower: 5000,
     optionBuyingPower: 4500,
   };
@@ -128,19 +140,23 @@ test("a real vendor payload is reported field for field under its source block",
       pendingDeposits: 0,
       marginBalance: 3750,
       longMarginValue: 8000,
-      isInCall: 0,
+      isInCall: false,
       maintenanceCall: 0,
       accountValue: 10000,
     },
     current: {
+      cashBalance: 1610.4,
+      moneyMarketFund: 42.75,
+      pendingDeposits: 0,
+      totalCash: 1653.15,
       availableFunds: 2500,
       optionBuyingPower: 4500,
       marginBalance: 3750,
       longMarginValue: 8000,
       maintenanceCall: 0,
-      isInCall: 0,
+      isInCall: false,
       equity: 9000,
-      liquidationValue: null,
+      liquidationValue: 9600,
     },
     presentInitialBalanceFieldNames: Object.keys(initialBalancesBlock()).sort(),
     presentCurrentBalanceFieldNames: Object.keys(currentBalancesBlock()).sort(),
@@ -154,11 +170,21 @@ test("a real vendor payload is reported field for field under its source block",
   );
 });
 
-test("cash evidence is taken from the start-of-day block and never from the live block", async () => {
-  // The live block carries a same-named margin figure but no cash at all.
+test("start of day cash and live cash are kept apart block by block", async () => {
+  // Both blocks carry same-named figures; neither may leak into the other.
   const account = vendorAccount({
-    initialBalances: { ...initialBalancesBlock(), marginBalance: 1 },
-    currentBalances: { ...currentBalancesBlock(), marginBalance: 2 },
+    initialBalances: {
+      ...initialBalancesBlock(),
+      marginBalance: 1,
+      cashBalance: 10,
+      totalCash: 30,
+    },
+    currentBalances: {
+      ...currentBalancesBlock(),
+      marginBalance: 2,
+      cashBalance: 20,
+      totalCash: 40,
+    },
   });
 
   const { result } = await withStub([account], () =>
@@ -167,12 +193,12 @@ test("cash evidence is taken from the start-of-day block and never from the live
 
   assert.equal(result.initial.marginBalance, 1);
   assert.equal(result.current.marginBalance, 2);
-  assert.equal("cashBalance" in result.current, false);
+  assert.equal(result.initial.cashBalance, 10);
+  assert.equal(result.current.cashBalance, 20);
+  assert.equal(result.initial.totalCash, 30);
+  assert.equal(result.current.totalCash, 40);
+  // `unsettledCash` is start-of-day evidence only; the live block has none.
   assert.equal("unsettledCash" in result.current, false);
-  assert.equal(
-    result.presentCurrentBalanceFieldNames.includes("cashBalance"),
-    false,
-  );
 });
 
 test("a partial payload with no initial balances block reports null and does not throw", async () => {
@@ -351,4 +377,158 @@ test("an empty account list is refused the same way as the balances read", async
       /No Schwab account found/,
     );
   });
+});
+
+test("a boolean isInCall is kept as the boolean the live payload sent", async () => {
+  const account = vendorAccount({
+    initialBalances: { ...initialBalancesBlock(), isInCall: true },
+    currentBalances: { ...currentBalancesBlock(), isInCall: true },
+  });
+
+  const { result } = await withStub([account], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.isInCall, true);
+  assert.equal(result.current.isInCall, true);
+});
+
+test("a false isInCall stays false and never collapses to null", async () => {
+  const { result } = await withStub([vendorAccount()], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.isInCall, false);
+  assert.equal(result.current.isInCall, false);
+});
+
+test("a numeric isInCall of zero is normalized to false", async () => {
+  const account = vendorAccount({
+    initialBalances: { ...initialBalancesBlock(), isInCall: 0 },
+    currentBalances: { ...currentBalancesBlock(), isInCall: 0 },
+  });
+
+  const { result } = await withStub([account], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.isInCall, false);
+  assert.equal(result.current.isInCall, false);
+});
+
+test("a numeric isInCall of one is normalized to true", async () => {
+  const account = vendorAccount({
+    initialBalances: { ...initialBalancesBlock(), isInCall: 1 },
+    currentBalances: { ...currentBalancesBlock(), isInCall: 2 },
+  });
+
+  const { result } = await withStub([account], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.isInCall, true);
+  assert.equal(result.current.isInCall, true);
+});
+
+test("an absent or wrongly typed isInCall is reported as null", async () => {
+  const initial = { ...initialBalancesBlock() };
+  delete initial.isInCall;
+  const account = vendorAccount({
+    initialBalances: initial,
+    currentBalances: { ...currentBalancesBlock(), isInCall: "false" },
+  });
+
+  const { result } = await withStub([account], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.isInCall, null);
+  assert.equal(result.current.isInCall, null);
+  assert.equal(
+    result.presentInitialBalanceFieldNames.includes("isInCall"),
+    false,
+  );
+});
+
+test("an absent unsettledCash is null and never required of a margin account", async () => {
+  // A real Schwab MARGIN account sent no `unsettledCash` at all.
+  const initial = { ...initialBalancesBlock() };
+  delete initial.unsettledCash;
+
+  const { result } = await withStub(
+    [vendorAccount({ initialBalances: initial })],
+    () => clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.unsettledCash, null);
+  assert.equal(result.initial.cashBalance, 1500.25);
+  assert.equal(
+    result.presentInitialBalanceFieldNames.includes("unsettledCash"),
+    false,
+  );
+});
+
+test("live cash is read from the current block when the broker sends it", async () => {
+  const { result } = await withStub([vendorAccount()], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.current.cashBalance, 1610.4);
+  assert.equal(result.current.moneyMarketFund, 42.75);
+  assert.equal(result.current.pendingDeposits, 0);
+  assert.equal(result.current.totalCash, 1653.15);
+});
+
+test("an absent live cash field is null and is not taken from the start of day block", async () => {
+  const current = { ...currentBalancesBlock() };
+  delete current.cashBalance;
+  delete current.totalCash;
+  delete current.optionBuyingPower;
+
+  const { result } = await withStub(
+    [vendorAccount({ currentBalances: current })],
+    () => clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.current.cashBalance, null);
+  assert.equal(result.current.totalCash, null);
+  // `optionBuyingPower` was absent on the probed account too.
+  assert.equal(result.current.optionBuyingPower, null);
+  // The start-of-day figures are still there and were not substituted.
+  assert.equal(result.initial.cashBalance, 1500.25);
+  assert.equal(result.initial.totalCash, 1543);
+});
+
+test("the live block field names list the cash keys the real account sent", async () => {
+  const { result } = await withStub([vendorAccount()], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  for (const name of [
+    "accruedInterest",
+    "cashBalance",
+    "cashReceipts",
+    "intradayBuyingPowerAmount",
+    "liquidationValue",
+    "longMarketValue",
+    "moneyMarketFund",
+    "pendingDeposits",
+    "savings",
+    "shortMarketValue",
+    "totalCash",
+  ]) {
+    assert.equal(
+      result.presentCurrentBalanceFieldNames.includes(name),
+      true,
+      `expected the live block to report ${name}`,
+    );
+  }
+});
+
+test("an account type the broker states is reported as sent", async () => {
+  const { result } = await withStub([vendorAccount({ type: "MARGIN" })], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.accountType, "MARGIN");
 });
