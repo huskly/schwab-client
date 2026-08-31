@@ -3,9 +3,49 @@ import test from "node:test";
 
 import { SchwabClient } from "../dist/index.js";
 
-// Ordinary Schwab balance fields so a fixture resembles the vendor response.
-// Settlement-evidence assertions do not depend on these values.
-function marginBalanceFields() {
+// The real Schwab `initialBalances` block: the START-OF-DAY snapshot, and the
+// only block that carries cash evidence.
+function initialBalancesBlock() {
+  return {
+    accruedInterest: 0,
+    availableFundsNonMarginableTrade: 0,
+    bondValue: 0,
+    buyingPower: 0,
+    cashBalance: 1500.25,
+    cashAvailableForTrading: 1200.5,
+    cashReceipts: 0,
+    dayTradingBuyingPower: 0,
+    dayTradingBuyingPowerCall: 0,
+    dayTradingEquityCall: 0,
+    equity: 0,
+    equityPercentage: 0,
+    liquidationValue: 0,
+    longMarginValue: 8000,
+    longOptionMarketValue: 0,
+    longStockValue: 0,
+    maintenanceCall: 0,
+    maintenanceRequirement: 0,
+    margin: 0,
+    marginEquity: 0,
+    moneyMarketFund: 42.75,
+    mutualFundValue: 0,
+    regTCall: 0,
+    shortMarginValue: 0,
+    shortOptionMarketValue: 0,
+    shortStockValue: 0,
+    totalCash: 1543,
+    isInCall: 0,
+    unsettledCash: 250.1,
+    pendingDeposits: 0,
+    marginBalance: 3750,
+    shortBalance: 0,
+    accountValue: 10000,
+  };
+}
+
+// The real Schwab `currentBalances` block: live, and carrying NO cash fields.
+// `projectedBalances` has the same shape.
+function currentBalancesBlock() {
   return {
     availableFunds: 2500,
     availableFundsNonMarginableTrade: 2400,
@@ -26,8 +66,20 @@ function marginBalanceFields() {
     isInCall: 0,
     stockBuyingPower: 5000,
     optionBuyingPower: 4500,
-    liquidationValue: 10000,
-    cashBalance: 1500,
+  };
+}
+
+// One whole account as Schwab sends it.
+function vendorAccount(overrides = {}) {
+  return {
+    securitiesAccount: {
+      accountNumber: "123456789",
+      positions: [],
+      initialBalances: initialBalancesBlock(),
+      currentBalances: currentBalancesBlock(),
+      projectedBalances: currentBalancesBlock(),
+      ...overrides,
+    },
   };
 }
 
@@ -57,46 +109,44 @@ function clientAt(epochMillis) {
   return client;
 }
 
-test("a modern payload carrying every settlement field is reported field for field", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "123456789",
-        type: "CASH",
-        positions: [],
-        currentBalances: {
-          ...marginBalanceFields(),
-          unsettledCash: 250,
-          cashAvailableForTrading: 1200,
-          cashAvailableForWithdrawal: 1100,
-        },
-      },
-    },
-  ];
-
-  const { result, requestedUrl } = await withStub(body, () =>
+test("a real vendor payload is reported field for field under its source block", async () => {
+  const { result, requestedUrl } = await withStub([vendorAccount()], () =>
     clientAt(1787000000000).getAccountSettlementEvidence(),
   );
 
   assert.deepEqual(result, {
     accountNumber: "123456789",
-    accountType: "CASH",
-    cashBalance: 1500,
-    unsettledCash: 250,
-    cashAvailableForTrading: 1200,
-    cashAvailableForWithdrawal: 1100,
-    availableFunds: 2500,
-    optionBuyingPower: 4500,
-    marginBalance: 3750,
-    longMarginValue: 8000,
+    accountType: null,
     currency: null,
     observedAtEpochMillis: 1787000000000,
-    presentBalanceFieldNames: Object.keys({
-      ...marginBalanceFields(),
-      unsettledCash: 250,
-      cashAvailableForTrading: 1200,
-      cashAvailableForWithdrawal: 1100,
-    }).sort(),
+    initial: {
+      cashBalance: 1500.25,
+      cashAvailableForTrading: 1200.5,
+      unsettledCash: 250.1,
+      totalCash: 1543,
+      moneyMarketFund: 42.75,
+      pendingDeposits: 0,
+      marginBalance: 3750,
+      longMarginValue: 8000,
+      isInCall: 0,
+      maintenanceCall: 0,
+      accountValue: 10000,
+    },
+    current: {
+      availableFunds: 2500,
+      optionBuyingPower: 4500,
+      marginBalance: 3750,
+      longMarginValue: 8000,
+      maintenanceCall: 0,
+      isInCall: 0,
+      equity: 9000,
+      liquidationValue: null,
+    },
+    presentInitialBalanceFieldNames: Object.keys(initialBalancesBlock()).sort(),
+    presentCurrentBalanceFieldNames: Object.keys(currentBalancesBlock()).sort(),
+    presentProjectedBalanceFieldNames: Object.keys(
+      currentBalancesBlock(),
+    ).sort(),
   });
   assert.equal(
     requestedUrl,
@@ -104,143 +154,167 @@ test("a modern payload carrying every settlement field is reported field for fie
   );
 });
 
-test("a legacy payload without the settlement fields reports null and does not throw", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "123456789",
-        positions: [],
-        currentBalances: marginBalanceFields(),
-      },
-    },
-  ];
+test("cash evidence is taken from the start-of-day block and never from the live block", async () => {
+  // The live block carries a same-named margin figure but no cash at all.
+  const account = vendorAccount({
+    initialBalances: { ...initialBalancesBlock(), marginBalance: 1 },
+    currentBalances: { ...currentBalancesBlock(), marginBalance: 2 },
+  });
 
-  const { result } = await withStub(body, () =>
+  const { result } = await withStub([account], () =>
     clientAt(1787000000000).getAccountSettlementEvidence(),
   );
 
-  assert.equal(result.unsettledCash, null);
-  assert.equal(result.cashAvailableForTrading, null);
-  assert.equal(result.cashAvailableForWithdrawal, null);
-  assert.equal(result.accountType, null);
-  assert.equal(result.cashBalance, 1500);
-  assert.equal(result.availableFunds, 2500);
+  assert.equal(result.initial.marginBalance, 1);
+  assert.equal(result.current.marginBalance, 2);
+  assert.equal("cashBalance" in result.current, false);
+  assert.equal("unsettledCash" in result.current, false);
+  assert.equal(
+    result.presentCurrentBalanceFieldNames.includes("cashBalance"),
+    false,
+  );
 });
 
-test("non-finite or wrongly typed settlement values become null instead of a number", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "123456789",
-        type: 7,
-        positions: [],
-        currentBalances: {
-          ...marginBalanceFields(),
-          unsettledCash: null,
-          cashAvailableForTrading: "1200.00",
-          cashAvailableForWithdrawal: Number.NaN,
-          currency: 840,
-        },
-      },
+test("a partial payload with no initial balances block reports null and does not throw", async () => {
+  const legacy = {
+    securitiesAccount: {
+      accountNumber: "123456789",
+      positions: [],
+      currentBalances: currentBalancesBlock(),
     },
-  ];
+  };
 
-  const { result } = await withStub(body, () =>
+  const { result } = await withStub([legacy], () =>
     clientAt(1787000000000).getAccountSettlementEvidence(),
   );
 
-  assert.equal(result.unsettledCash, null);
-  assert.equal(result.cashAvailableForTrading, null);
-  assert.equal(result.cashAvailableForWithdrawal, null);
+  assert.deepEqual(result.initial, {
+    cashBalance: null,
+    cashAvailableForTrading: null,
+    unsettledCash: null,
+    totalCash: null,
+    moneyMarketFund: null,
+    pendingDeposits: null,
+    marginBalance: null,
+    longMarginValue: null,
+    isInCall: null,
+    maintenanceCall: null,
+    accountValue: null,
+  });
+  assert.deepEqual(result.presentInitialBalanceFieldNames, []);
+  assert.deepEqual(result.presentProjectedBalanceFieldNames, []);
+  assert.equal(result.current.availableFunds, 2500);
+  assert.equal(result.accountType, null);
+});
+
+test("non-finite or wrongly typed values become null instead of a number", async () => {
+  const account = vendorAccount({
+    type: 7,
+    currency: 840,
+    initialBalances: {
+      ...initialBalancesBlock(),
+      cashBalance: null,
+      cashAvailableForTrading: "1200.00",
+      unsettledCash: Number.NaN,
+      totalCash: Number.POSITIVE_INFINITY,
+      moneyMarketFund: true,
+      accountValue: { amount: 10000 },
+    },
+    currentBalances: {
+      ...currentBalancesBlock(),
+      availableFunds: "2500",
+      equity: Number.NaN,
+      optionBuyingPower: null,
+    },
+  });
+
+  const { result } = await withStub([account], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.equal(result.initial.cashBalance, null);
+  assert.equal(result.initial.cashAvailableForTrading, null);
+  assert.equal(result.initial.unsettledCash, null);
+  assert.equal(result.initial.totalCash, null);
+  assert.equal(result.initial.moneyMarketFund, null);
+  assert.equal(result.initial.accountValue, null);
+  assert.equal(result.current.availableFunds, null);
+  assert.equal(result.current.equity, null);
+  assert.equal(result.current.optionBuyingPower, null);
   assert.equal(result.accountType, null);
   assert.equal(result.currency, null);
 });
 
-test("present balance field names list key names only and stay sorted", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "123456789",
-        positions: [],
-        currentBalances: {
-          optionBuyingPower: 4500,
-          cashBalance: 1500,
-          availableFunds: 2500,
-          marginBalance: 3750,
-          longMarginValue: 8000,
-          unsettledCash: 250,
-        },
-      },
-    },
-  ];
+test("a balance block sent as a non object is treated as absent", async () => {
+  const account = vendorAccount({
+    initialBalances: null,
+    projectedBalances: "unavailable",
+  });
 
-  const { result } = await withStub(body, () =>
+  const { result } = await withStub([account], () =>
     clientAt(1787000000000).getAccountSettlementEvidence(),
   );
 
-  assert.deepEqual(result.presentBalanceFieldNames, [
-    "availableFunds",
+  assert.equal(result.initial.cashBalance, null);
+  assert.deepEqual(result.presentInitialBalanceFieldNames, []);
+  assert.deepEqual(result.presentProjectedBalanceFieldNames, []);
+});
+
+test("present balance field names list key names only and stay sorted per block", async () => {
+  const account = vendorAccount({
+    initialBalances: { unsettledCash: 250, cashBalance: 1500, totalCash: 1750 },
+    currentBalances: { optionBuyingPower: 4500, availableFunds: 2500 },
+    projectedBalances: { marginBalance: 3750, availableFunds: 2400 },
+  });
+
+  const { result } = await withStub([account], () =>
+    clientAt(1787000000000).getAccountSettlementEvidence(),
+  );
+
+  assert.deepEqual(result.presentInitialBalanceFieldNames, [
     "cashBalance",
-    "longMarginValue",
-    "marginBalance",
-    "optionBuyingPower",
+    "totalCash",
     "unsettledCash",
+  ]);
+  assert.deepEqual(result.presentCurrentBalanceFieldNames, [
+    "availableFunds",
+    "optionBuyingPower",
+  ]);
+  assert.deepEqual(result.presentProjectedBalanceFieldNames, [
+    "availableFunds",
+    "marginBalance",
   ]);
 });
 
 test("the observation timestamp comes from the injected client clock", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "123456789",
-        positions: [],
-        currentBalances: marginBalanceFields(),
-      },
-    },
-  ];
-
-  const { result } = await withStub(body, () =>
+  const { result } = await withStub([vendorAccount()], () =>
     clientAt(1234567890123).getAccountSettlementEvidence(),
   );
 
   assert.equal(result.observedAtEpochMillis, 1234567890123);
 });
 
-test("the account number comes from the envelope the balances object does not carry", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "987654321",
-        positions: [],
-        currentBalances: marginBalanceFields(),
-      },
-    },
-  ];
-
-  const { result } = await withStub(body, () =>
-    clientAt(1787000000000).getAccountSettlementEvidence(),
+test("the account number comes from the envelope the balance blocks do not carry", async () => {
+  const { result } = await withStub(
+    [vendorAccount({ accountNumber: "987654321" })],
+    () => clientAt(1787000000000).getAccountSettlementEvidence(),
   );
 
   assert.equal(result.accountNumber, "987654321");
-  assert.equal("accountNumber" in marginBalanceFields(), false);
+  assert.equal("accountNumber" in initialBalancesBlock(), false);
+  assert.equal("accountNumber" in currentBalancesBlock(), false);
 });
 
 test("a multi-account response selects the same account as getAccountBalances", async () => {
   const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "111111111",
-        positions: [],
-        currentBalances: { ...marginBalanceFields(), cashBalance: 11 },
-      },
-    },
-    {
-      securitiesAccount: {
-        accountNumber: "222222222",
-        positions: [],
-        currentBalances: { ...marginBalanceFields(), cashBalance: 22 },
-      },
-    },
+    vendorAccount({
+      accountNumber: "111111111",
+      currentBalances: { ...currentBalancesBlock(), availableFunds: 11 },
+    }),
+    vendorAccount({
+      accountNumber: "222222222",
+      currentBalances: { ...currentBalancesBlock(), availableFunds: 22 },
+    }),
   ];
 
   const { result: evidence } = await withStub(body, () =>
@@ -251,26 +325,23 @@ test("a multi-account response selects the same account as getAccountBalances", 
   );
 
   assert.equal(evidence.accountNumber, "111111111");
-  assert.equal(evidence.cashBalance, balances.cashBalance);
+  assert.equal(evidence.current.availableFunds, balances.availableFunds);
 });
 
 test("a currency the broker never sends stays null and is never assumed to be USD", async () => {
-  const body = [
-    {
-      securitiesAccount: {
-        accountNumber: "123456789",
-        positions: [],
-        currentBalances: marginBalanceFields(),
-      },
-    },
-  ];
-
-  const { result } = await withStub(body, () =>
+  const { result } = await withStub([vendorAccount()], () =>
     clientAt(1787000000000).getAccountSettlementEvidence(),
   );
 
   assert.equal(result.currency, null);
-  assert.equal(result.presentBalanceFieldNames.includes("currency"), false);
+  assert.equal(
+    result.presentCurrentBalanceFieldNames.includes("currency"),
+    false,
+  );
+  assert.equal(
+    result.presentInitialBalanceFieldNames.includes("currency"),
+    false,
+  );
 });
 
 test("an empty account list is refused the same way as the balances read", async () => {

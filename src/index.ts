@@ -103,6 +103,8 @@ export type {
   SchwabOptionDeliverableEvidence,
   SchwabOptionContractEvidence,
   SchwabAccountSettlementEvidence,
+  SchwabInitialSettlementBalances,
+  SchwabCurrentSettlementBalances,
 } from "./schwabApiTypes.js";
 
 // Constants

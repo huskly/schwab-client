@@ -174,28 +174,67 @@ export interface SchwabOptionDeliverableEvidence {
 
 // Account settlement evidence (huskly/strategy-terminal#1026).
 //
-// One observation of a single Schwab account's raw balance evidence. Every
-// field the broker may omit is `null` when it was absent, non-finite, or of
-// the wrong type; no value is inferred or defaulted. Schwab sends no currency
-// and no observation time on this payload, so `currency` is `null` unless the
-// broker itself supplies it, and `observedAtEpochMillis` is minted by the
-// client clock. `presentBalanceFieldNames` lists the key NAMES present on the
-// raw `currentBalances` object, never their values, so an operator can confirm
-// the live schema without exposing amounts.
+// One observation of a single Schwab account's raw balance evidence.
+//
+// SOURCE BLOCKS MUST NOT BE CONFUSED. Schwab sends three balance blocks and
+// they do not mean the same thing:
+//   - `initialBalances` is the START-OF-DAY snapshot. It is the only block that
+//     carries cash evidence (`cashBalance`, `cashAvailableForTrading`,
+//     `unsettledCash`, `totalCash`, ...). These figures are stale intraday:
+//     they do not move when a trade fills or when cash settles during the day.
+//   - `currentBalances` is the LIVE block. It carries no cash fields at all,
+//     only margin/buying-power figures.
+//   - `projectedBalances` has the same shape as `currentBalances`.
+// Every field below is therefore nested under the block it was read from. A
+// consumer must never treat `initial.cashBalance` as a live cash figure, and
+// must never expect a cash field on `current`.
+//
+// Every field the broker may omit is `null` when it was absent, non-finite, or
+// of the wrong type; no value is inferred or defaulted. Schwab sends no
+// currency, no `securitiesAccount.type`, and no observation time on this
+// payload, so `accountType` and `currency` are `null` in practice and
+// `observedAtEpochMillis` is minted by the client clock. The
+// `present*BalanceFieldNames` lists report the key NAMES present on each raw
+// block, sorted, never their values, so an operator can confirm the live
+// schema without exposing amounts.
+
+// Start-of-day figures, read from `initialBalances`. NOT live.
+export interface SchwabInitialSettlementBalances {
+  cashBalance: number | null;
+  cashAvailableForTrading: number | null;
+  unsettledCash: number | null;
+  totalCash: number | null;
+  moneyMarketFund: number | null;
+  pendingDeposits: number | null;
+  marginBalance: number | null;
+  longMarginValue: number | null;
+  isInCall: number | null;
+  maintenanceCall: number | null;
+  accountValue: number | null;
+}
+
+// Live figures, read from `currentBalances`. Carries no cash fields.
+export interface SchwabCurrentSettlementBalances {
+  availableFunds: number | null;
+  optionBuyingPower: number | null;
+  marginBalance: number | null;
+  longMarginValue: number | null;
+  maintenanceCall: number | null;
+  isInCall: number | null;
+  equity: number | null;
+  liquidationValue: number | null;
+}
+
 export interface SchwabAccountSettlementEvidence {
   accountNumber: string;
   accountType: string | null;
-  cashBalance: number;
-  unsettledCash: number | null;
-  cashAvailableForTrading: number | null;
-  cashAvailableForWithdrawal: number | null;
-  availableFunds: number;
-  optionBuyingPower: number;
-  marginBalance: number;
-  longMarginValue: number;
   currency: string | null;
   observedAtEpochMillis: number;
-  presentBalanceFieldNames: string[];
+  initial: SchwabInitialSettlementBalances;
+  current: SchwabCurrentSettlementBalances;
+  presentInitialBalanceFieldNames: string[];
+  presentCurrentBalanceFieldNames: string[];
+  presentProjectedBalanceFieldNames: string[];
 }
 
 export interface SchwabOptionContractEvidence {
