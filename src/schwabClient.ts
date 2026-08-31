@@ -22,6 +22,7 @@ import type {
   SchwabUserPreference,
   SchwabOptionContractEvidence,
   SchwabOptionDeliverableEvidence,
+  SchwabAccountSettlementEvidence,
 } from "./schwabApiTypes.js";
 import { differenceInDays, format, parse, startOfYear } from "date-fns";
 
@@ -454,6 +455,66 @@ export class SchwabClient {
       throw new Error("No Schwab account found");
     }
     return accounts[0].securitiesAccount.currentBalances;
+  }
+
+  /**
+   * Read one account's raw settlement evidence in a single observation.
+   *
+   * This reads the same accounts endpoint as `getAccountBalances()` and picks
+   * the same account, but keeps the envelope so the account identity travels
+   * with the balances.
+   *
+   * Fields are raw Schwab evidence. `unsettledCash`, `cashAvailableForTrading`,
+   * `cashAvailableForWithdrawal`, `accountType`, and `currency` are undeclared
+   * on this payload today: they are read defensively from the raw object and
+   * are `null` when absent, non-finite, or of the wrong type. Nothing is
+   * inferred from an adjacent field and nothing is defaulted - in particular
+   * `currency` is never assumed to be "USD".
+   *
+   * The payload carries no timestamp, so `observedAtEpochMillis` is minted from
+   * the client clock seam `today()`. `presentBalanceFieldNames` reports the key
+   * names present on the raw balances object, sorted, and never their values.
+   */
+  async getAccountSettlementEvidence(): Promise<SchwabAccountSettlementEvidence> {
+    const accounts = await this.makeApiRequest<SchwabAccount[]>(
+      "/trader/v1/accounts?fields=positions",
+    );
+    if (accounts.length === 0) {
+      throw new Error("No Schwab account found");
+    }
+
+    const securitiesAccount = accounts[0].securitiesAccount;
+    const balances = securitiesAccount.currentBalances;
+    // The transport blind-casts the response, so undeclared keys may or may not
+    // arrive at runtime. Read them off the raw objects instead of the types.
+    const rawAccount = securitiesAccount as unknown as Record<string, unknown>;
+    const rawBalances =
+      (balances as unknown as Record<string, unknown> | undefined) ?? {};
+
+    const numberOrNull = (value: unknown): number | null =>
+      typeof value === "number" && Number.isFinite(value) ? value : null;
+    const stringOrNull = (value: unknown): string | null =>
+      typeof value === "string" ? value : null;
+
+    return {
+      accountNumber: securitiesAccount.accountNumber,
+      accountType: stringOrNull(rawAccount.type),
+      cashBalance: balances.cashBalance,
+      unsettledCash: numberOrNull(rawBalances.unsettledCash),
+      cashAvailableForTrading: numberOrNull(
+        rawBalances.cashAvailableForTrading,
+      ),
+      cashAvailableForWithdrawal: numberOrNull(
+        rawBalances.cashAvailableForWithdrawal,
+      ),
+      availableFunds: balances.availableFunds,
+      optionBuyingPower: balances.optionBuyingPower,
+      marginBalance: balances.marginBalance,
+      longMarginValue: balances.longMarginValue,
+      currency: stringOrNull(rawBalances.currency),
+      observedAtEpochMillis: this.today().getTime(),
+      presentBalanceFieldNames: Object.keys(rawBalances).sort(),
+    };
   }
 
   async getPositions(symbol?: string): Promise<SchwabPosition[]> {

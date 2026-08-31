@@ -172,6 +172,32 @@ export interface SchwabOptionDeliverableEvidence {
   currencyType: string | null;
 }
 
+// Account settlement evidence (huskly/strategy-terminal#1026).
+//
+// One observation of a single Schwab account's raw balance evidence. Every
+// field the broker may omit is `null` when it was absent, non-finite, or of
+// the wrong type; no value is inferred or defaulted. Schwab sends no currency
+// and no observation time on this payload, so `currency` is `null` unless the
+// broker itself supplies it, and `observedAtEpochMillis` is minted by the
+// client clock. `presentBalanceFieldNames` lists the key NAMES present on the
+// raw `currentBalances` object, never their values, so an operator can confirm
+// the live schema without exposing amounts.
+export interface SchwabAccountSettlementEvidence {
+  accountNumber: string;
+  accountType: string | null;
+  cashBalance: number;
+  unsettledCash: number | null;
+  cashAvailableForTrading: number | null;
+  cashAvailableForWithdrawal: number | null;
+  availableFunds: number;
+  optionBuyingPower: number;
+  marginBalance: number;
+  longMarginValue: number;
+  currency: string | null;
+  observedAtEpochMillis: number;
+  presentBalanceFieldNames: string[];
+}
+
 export interface SchwabOptionContractEvidence {
   chainSymbol: string;
   underlyingSymbol: string | null;

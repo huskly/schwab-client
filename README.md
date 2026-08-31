@@ -141,6 +141,26 @@ console.log(`Margin Balance: $${balances.marginBalance}`);
 console.log(`Cash: $${balances.cashBalance}`);
 ```
 
+#### Get Account Settlement Evidence
+
+```typescript
+const evidence = await client.getAccountSettlementEvidence();
+console.log(`Account: ${evidence.accountNumber} (${evidence.accountType})`);
+console.log(`Cash: ${evidence.cashBalance}`);
+console.log(`Unsettled cash: ${evidence.unsettledCash}`);
+console.log(`Observed at: ${new Date(evidence.observedAtEpochMillis)}`);
+console.log(`Balance fields: ${evidence.presentBalanceFieldNames.join(", ")}`);
+```
+
+One observation of one account, read from the same accounts endpoint as
+`getAccountBalances()` but keeping the account envelope. `unsettledCash`,
+`cashAvailableForTrading`, `cashAvailableForWithdrawal`, `accountType`, and
+`currency` are `null` when Schwab did not supply them; nothing is inferred and
+`currency` is never assumed to be `USD`. Schwab sends no timestamp on this
+payload, so `observedAtEpochMillis` comes from the client clock (`today()`).
+`presentBalanceFieldNames` lists the raw balance key names only, sorted, never
+their values.
+
 #### Get Positions
 
 ```typescript
@@ -284,6 +304,7 @@ const today = client.today();
 | ----------------------------------------------- | --------------------------------------- |
 | `getAccountEquity()`                            | Get total account equity                |
 | `getAccountBalances()`                          | Get detailed account balances           |
+| `getAccountSettlementEvidence()`                | Get one raw account settlement reading  |
 | `getPositions(symbol?)`                         | Get account positions                   |
 | `getPutCreditSpreads(symbol)`                   | Get existing PUT option credit spreads  |
 | `fetchAccountNumbers()`                         | Get all linked account numbers          |
