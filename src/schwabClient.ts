@@ -465,18 +465,27 @@ export class SchwabClient {
    * identity travels with the balances.
    *
    * Every figure is attributed to the block it came from and the two blocks
-   * mean different things: `initialBalances` is the START-OF-DAY snapshot and
-   * is the only block carrying cash evidence, while `currentBalances` is the
-   * LIVE block and carries no cash fields at all. The consumer must never
-   * confuse them - an `initial` cash figure does not move intraday.
+   * mean different things: `initialBalances` is the START-OF-DAY snapshot,
+   * while `currentBalances` is the LIVE block. Both carry cash. The consumer
+   * must never confuse them - an `initial` cash figure does not move intraday.
    *
    * Fields are raw Schwab evidence, read defensively off the raw objects:
    * a present finite `number` is kept; absent, `null`, non-finite, or wrongly
-   * typed values become `null`. Nothing throws for a missing field, nothing is
-   * inferred from an adjacent field, and nothing is defaulted - in particular
-   * `currency` is never assumed to be "USD". Schwab sends no
-   * `securitiesAccount.type` and no currency today, so both are `null` in
-   * practice.
+   * typed values become `null`. `isInCall` is the one exception: the live
+   * payload sends a boolean, so a boolean is kept and a finite number is
+   * normalized (0 -> false, anything else -> true). Nothing throws for a
+   * missing field, nothing is inferred from an adjacent field, and nothing is
+   * defaulted - in particular `currency` is never assumed to be "USD". Schwab
+   * sends no currency today, so `currency` is `null` in practice.
+   *
+   * Observed on a real Schwab MARGIN account (read-only probe): `accountType`
+   * is stated ("MARGIN"); `initialBalances` had no `unsettledCash` even though
+   * the published schema lists it; `isInCall` was a boolean; `currentBalances`
+   * carried live `cashBalance`, `moneyMarketFund`, `pendingDeposits`,
+   * `cashReceipts`, `accruedInterest`, `liquidationValue`, `longMarketValue`,
+   * `shortMarketValue`, `savings`, and `intradayBuyingPowerAmount`, but
+   * `optionBuyingPower` was absent. One account proves presence, never
+   * absence, so every field stays optional.
    *
    * The payload carries no timestamp, so `observedAtEpochMillis` is minted from
    * the client clock seam `today()`. The `present*BalanceFieldNames` lists
@@ -507,6 +516,18 @@ export class SchwabClient {
       typeof value === "number" && Number.isFinite(value) ? value : null;
     const stringOrNull = (value: unknown): string | null =>
       typeof value === "string" ? value : null;
+    // The live payload sends `isInCall` as a boolean; the published schema
+    // calls it a number. Keep a boolean, normalize a finite number, refuse the
+    // rest.
+    const inCallOrNull = (value: unknown): boolean | null => {
+      if (typeof value === "boolean") {
+        return value;
+      }
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value !== 0;
+      }
+      return null;
+    };
 
     return {
       accountNumber: securitiesAccount.accountNumber,
@@ -525,18 +546,22 @@ export class SchwabClient {
         pendingDeposits: numberOrNull(rawInitial.pendingDeposits),
         marginBalance: numberOrNull(rawInitial.marginBalance),
         longMarginValue: numberOrNull(rawInitial.longMarginValue),
-        isInCall: numberOrNull(rawInitial.isInCall),
+        isInCall: inCallOrNull(rawInitial.isInCall),
         maintenanceCall: numberOrNull(rawInitial.maintenanceCall),
         accountValue: numberOrNull(rawInitial.accountValue),
       },
-      // Live block. Carries no cash fields.
+      // Live block. It does carry cash on a real account.
       current: {
+        cashBalance: numberOrNull(rawCurrent.cashBalance),
+        moneyMarketFund: numberOrNull(rawCurrent.moneyMarketFund),
+        pendingDeposits: numberOrNull(rawCurrent.pendingDeposits),
+        totalCash: numberOrNull(rawCurrent.totalCash),
         availableFunds: numberOrNull(rawCurrent.availableFunds),
         optionBuyingPower: numberOrNull(rawCurrent.optionBuyingPower),
         marginBalance: numberOrNull(rawCurrent.marginBalance),
         longMarginValue: numberOrNull(rawCurrent.longMarginValue),
         maintenanceCall: numberOrNull(rawCurrent.maintenanceCall),
-        isInCall: numberOrNull(rawCurrent.isInCall),
+        isInCall: inCallOrNull(rawCurrent.isInCall),
         equity: numberOrNull(rawCurrent.equity),
         liquidationValue: numberOrNull(rawCurrent.liquidationValue),
       },
