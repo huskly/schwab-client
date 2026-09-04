@@ -51,7 +51,7 @@ jobs:
             exit 1
           fi
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
       - name: Check
         run: yarn check
       - name: Test
