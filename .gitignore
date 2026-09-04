@@ -1,4 +1,21 @@
+.env
+
+# Node
 node_modules/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 dist/
-*.log
-.DS_Store
+*.tsbuildinfo
+.eslintcache
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Local Git worktrees
+.worktrees/
+
+# Never commit keys
+*.pem
