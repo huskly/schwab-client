@@ -1,5 +1,10 @@
 // Main client
 export { SchwabClient } from "./schwabClient.js";
+export type {
+  SchwabAccountTransactionEvidence,
+  SchwabTransactionEvidenceRequest,
+  SchwabTransactionEvidenceRow,
+} from "./accountTransactionEvidence.js";
 
 // Order economics helpers
 export { getOrderFees, getRealizedFills } from "./orderEconomics.js";

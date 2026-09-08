@@ -205,6 +205,38 @@ const history = await client.fetchTransactionHistory(
 );
 ```
 
+#### Get Raw Account Transaction Evidence
+
+```typescript
+const evidence = await client.getAccountTransactionEvidence({
+  accountHash,
+  startDate: new Date("2026-09-01T00:00:00Z"),
+  endDate: new Date("2026-09-02T00:00:00Z"),
+  signal: abortController.signal,
+});
+```
+
+Use a non-empty account hash with letters, digits, hyphens, or underscores.
+The dates must be ordered, no later than the client clock, and within its past
+60 days. The method requests all documented transaction categories, including
+cash transfers, without a symbol filter. It makes one request for the named
+account, with a 30-second deadline and optional caller cancellation. Redirects
+are refused. It does not discover accounts, retry, or change orders.
+
+`rows` preserves each raw transaction object under `fields`, including unknown
+fields, explicit zero, nested transfer items, and source correction fields.
+Absent currency, status, timestamp, or identity fields remain absent. An empty
+response array stays empty. A non-array response or malformed row is refused,
+not discarded. Request errors do not include the private account URL or response.
+
+The envelope records the requested account hash, ISO range, explicit categories,
+and client observation time. These are private evidence, not safe log fields.
+The read does **not** classify deposits or certify complete accounting coverage.
+A consumer must validate source identity, currency, timing, corrections, and
+coverage before it calculates investment returns. See the
+[transaction API reference](https://schwab-py.readthedocs.io/en/latest/client.html#transaction-history)
+for the documented category list and history limits.
+
 #### Get User Preferences
 
 ```typescript
