@@ -24,6 +24,15 @@ import type {
   SchwabOptionDeliverableEvidence,
   SchwabAccountSettlementEvidence,
 } from "./schwabApiTypes.js";
+import {
+  SCHWAB_TRANSACTION_EVIDENCE_TYPES,
+  transactionEvidencePath,
+  transactionEvidenceRows,
+} from "./accountTransactionEvidence.js";
+import type {
+  SchwabAccountTransactionEvidence,
+  SchwabTransactionEvidenceRequest,
+} from "./accountTransactionEvidence.js";
 import { differenceInDays, format, parse, startOfYear } from "date-fns";
 
 const SCHWAB_API_BASE_URL = "https://api.schwabapi.com";
@@ -699,6 +708,61 @@ export class SchwabClient {
       accountNumber: account.accountNumber,
       transactions: histories[index] ?? [],
     }));
+  }
+
+  /**
+   * One bounded account-wide read with all documented transaction categories.
+   * Raw fields preserve currency and correction evidence without interpreting it.
+   * No retries, account discovery, or order mutations occur here.
+   */
+  async getAccountTransactionEvidence(
+    input: SchwabTransactionEvidenceRequest,
+  ): Promise<SchwabAccountTransactionEvidence> {
+    const endpoint = transactionEvidencePath(input, this.today());
+    // Capture the request before awaiting. Caller mutation cannot change the envelope.
+    const requestedAccountHash = input.accountHash;
+    const requestedStart = input.startDate.toISOString();
+    const requestedEnd = input.endDate.toISOString();
+    const deadline = AbortSignal.timeout(30_000);
+    const signal =
+      input.signal === undefined
+        ? deadline
+        : AbortSignal.any([input.signal, deadline]);
+    let raw: unknown;
+    try {
+      signal.throwIfAborted();
+      raw = await this.makeApiRequest<unknown>(endpoint, {
+        signal,
+        redirect: "error",
+      });
+    } catch (error) {
+      // The ordinary request error contains the private account URL. Do not expose it here.
+      if (signal.aborted)
+        throw new DOMException(
+          "Transaction evidence read aborted",
+          "AbortError",
+        );
+      if (
+        error instanceof Error &&
+        error.message ===
+          "Unauthorized - access token may be expired or invalid"
+      ) {
+        // eslint-disable-next-line preserve-caught-error -- A cause can expose private request data.
+        throw new Error(
+          "Unauthorized - access token may be expired or invalid",
+        );
+      }
+      // eslint-disable-next-line preserve-caught-error -- A cause can expose the account URL or token.
+      throw new Error("Schwab transaction evidence request failed");
+    }
+    return {
+      requestedAccountHash,
+      requestedStart,
+      requestedEnd,
+      requestedTypes: SCHWAB_TRANSACTION_EVIDENCE_TYPES,
+      observedAtEpochMillis: this.today().getTime(),
+      rows: transactionEvidenceRows(raw),
+    };
   }
 
   async fetchAccountTransactionHistory(
